@@ -10,12 +10,12 @@ Hệ thống cung cấp lệnh CLI tức thì qua file thực thi [sac-cli.bat](
 
 ```powershell
 # 1. Kiểm định 3 tầng một file .pkt bất kỳ (chỉ mất ~0.5 giây)
-.\sac-cli.bat validate "C:\Users\Admin\Desktop\SUB PHU YEN\GiaCo_MaiTaluy_PhuYen.pkt"
+.\sac-cli.bat 
 
-# 2. Dựng nhanh riêng sub Gia Cố Mái Taluy Phú Yên và tự động kiểm định:
+# 2. Dựng nhanh riêng sub và tự động kiểm định:
 .\sac-cli.bat build --giaco
 
-# 3. Dựng nhanh Bộ 7 Subassembly chuẩn (đã xóa chữ visual) và tự động kiểm định:
+# 3. Dựng nhanh Bộ Subassembly chuẩn và tự động kiểm định:
 .\sac-cli.bat build --sub7
 
 # 4. DỰNG TẤT CẢ, tự động chạy kiểm định Native DLL 100% và xuất ra Desktop:
