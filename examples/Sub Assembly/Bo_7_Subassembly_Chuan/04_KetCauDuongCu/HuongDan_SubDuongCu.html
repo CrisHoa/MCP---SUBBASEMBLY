@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hướng dẫn — Subassembly Kết cấu đường cũ (DuongCu)</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --ink:#e6e8ec; --muted:#9aa3b2;
+    --line:#272c36; --accent:#4ea1ff; --warn:#ffb454; --code:#1b1f27;
+    --th:#1d2230; --zebra:#13161c;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  }
+  .wrap{max-width:880px; margin:0 auto; padding:40px 24px 80px}
+  h1{font-size:26px; line-height:1.25; margin:0 0 6px}
+  h2{font-size:19px; margin:38px 0 12px; padding-bottom:8px; border-bottom:1px solid var(--line)}
+  h3{font-size:15px; margin:22px 0 8px}
+  p{margin:10px 0}
+  a{color:var(--accent); text-decoration:none}
+  a:hover{text-decoration:underline}
+  .sub{color:var(--muted); margin:0 0 4px}
+  .meta{
+    background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--accent);
+    border-radius:8px; padding:12px 16px; margin:18px 0 8px; color:var(--muted); font-size:14px
+  }
+  .meta code{color:var(--ink)}
+  code,kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em}
+  :not(pre)>code{background:var(--code); border:1px solid var(--line); border-radius:5px; padding:1px 6px; color:#cfe0ff}
+  pre{
+    background:var(--code); border:1px solid var(--line); border-radius:10px;
+    padding:16px; overflow:auto; line-height:1.45; color:#c9d3e0; font-size:13px
+  }
+  table{border-collapse:collapse; width:100%; margin:14px 0; font-size:14px}
+  th,td{border:1px solid var(--line); padding:8px 11px; text-align:left; vertical-align:top}
+  th{background:var(--th); font-weight:600}
+  tbody tr:nth-child(even){background:var(--zebra)}
+  td code{white-space:nowrap}
+  ol,ul{padding-left:22px} li{margin:5px 0}
+  .note{
+    background:rgba(255,180,84,.08); border:1px solid rgba(255,180,84,.35);
+    border-left:3px solid var(--warn); border-radius:8px; padding:12px 16px; margin:14px 0
+  }
+  .note strong{color:var(--warn)}
+  .toc{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 18px; margin:22px 0}
+  .toc ol{margin:6px 0 0; padding-left:20px}
+  .toc a{color:var(--ink)}
+  footer{margin-top:46px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:13px; font-style:italic}
+  @media print{ body{background:#fff;color:#000} .wrap{max-width:100%} pre,code,th,.meta,.note,.toc{background:#f5f5f5;color:#000} a{color:#000} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Subassembly — KẾT CẤU ĐƯỜNG CŨ (DuongCu)</h1>
+  <p class="sub">Hướng dẫn sử dụng</p>
+
+  <div class="meta">
+    Class: <code>SACVisualInfra._05.DuongCu.DuongCuSubAssembly</code><br>
+    Port từ <code>SUB_DUONGCU.pkt</code> (Subassembly Composer) sang .NET thuần.
+  </div>
+
+  <div class="toc">
+    <strong>Mục lục</strong>
+    <ol>
+      <li><a href="#s1">Công dụng</a></li>
+      <li><a href="#s2">Điểm gắn (Attachment)</a></li>
+      <li><a href="#s3">Tham số (Parameters)</a></li>
+      <li><a href="#s4">Targets (mục tiêu)</a></li>
+      <li><a href="#s5">Đầu ra (Codes)</a></li>
+      <li><a href="#s6">Quy trình dùng nhanh</a></li>
+      <li><a href="#s7">Tùy biến &amp; giới hạn đã biết</a></li>
+      <li><a href="#s8">Xử lý sự cố</a></li>
+    </ol>
+  </div>
+
+  <h2 id="s1">1. Công dụng</h2>
+  <p>Vẽ một <strong>khối kết cấu (shape)</strong> ốp theo bề mặt đường cũ hiện hữu. Mặt trên của khối bám đúng địa hình mặt đường cũ; mặt đáy là mặt đó dịch xuống một khoảng bằng chiều dày <code>H</code>. Hai đầu là vách thẳng đứng.</p>
+  <p>Dùng để bóc tách / thống kê khối lượng lớp kết cấu đường cũ trong corridor (vd: cào bóc mặt đường hiện trạng trước khi làm mới).</p>
+<pre>        offset −WL                     offset +WR
+            ●━━━━━━━━━━ EG (mặt đường cũ) ━━━━━━━━━●   ← link "MDC" (CL)
+            ┃                                       ┃   ← vách "V-DC"
+            ●━━━━━━━━ EG − H (đáy kết cấu) ━━━━━━━━━●   ← link "DayDC"
+                         shape "KCDC" (CS)</pre>
+
+  <h2 id="s2">2. Điểm gắn (Attachment)</h2>
+  <p>Sub gắn tại <strong>origin / marker point</strong>, đặt trên mặt đường cũ tại offset của điểm gắn trong assembly. Khối trải sang <strong>trái <code>WL</code></strong> và <strong>phải <code>WR</code></strong> quanh điểm gắn.</p>
+  <p>Trong Assembly: kéo sub thả vào marker mong muốn (thường là tim đường hoặc mép phần xe chạy cũ).</p>
+
+  <h2 id="s3">3. Tham số (Parameters)</h2>
+  <table>
+    <thead><tr><th>Tên</th><th>Hiển thị</th><th>Mặc định</th><th>Đơn vị</th><th>Ý nghĩa</th></tr></thead>
+    <tbody>
+      <tr><td><code>WL</code></td><td>Bề rộng trái</td><td>3.000</td><td>m</td><td>Khoảng trải sang trái điểm gắn</td></tr>
+      <tr><td><code>WR</code></td><td>Bề rộng phải</td><td>3.000</td><td>m</td><td>Khoảng trải sang phải điểm gắn</td></tr>
+      <tr><td><code>H</code></td><td>Chiều dày kết cấu</td><td>0.300</td><td>m</td><td>Bề dày khối (mặt đáy = mặt trên − H)</td></tr>
+      <tr><td><code>CL</code></td><td>Code Link mặt trên</td><td>MDC</td><td>—</td><td>Mã link gán cho mặt trên</td></tr>
+      <tr><td><code>CS</code></td><td>Code Shape kết cấu</td><td>KCDC</td><td>—</td><td>Mã shape gán cho khối</td></tr>
+    </tbody>
+  </table>
+  <p>Ghi chú:</p>
+  <ul>
+    <li><code>WL</code>, <code>WR</code>, <code>H</code> hiển thị đơn vị <strong>m</strong> (kiểu chiều dài). Nhập trị dương; trị âm tự quy về 0.</li>
+    <li><code>H</code> ≤ 0 sẽ tự lấy lại 0.300 m.</li>
+    <li>Mặt đáy luôn mang code cố định <code>DayDC</code>, vách đứng mang code <code>V-DC</code> (không sửa qua tham số).</li>
+  </ul>
+
+  <h2 id="s4">4. Targets (mục tiêu)</h2>
+  <p>Gán ở tab <strong>Target Parameters</strong> khi tạo corridor (chuột phải Corridor → <em>Properties</em> → <em>Parameters</em> → cột <em>Target</em>).</p>
+  <table>
+    <thead><tr><th>Target</th><th>Loại</th><th>Bắt buộc</th><th>Vai trò</th></tr></thead>
+    <tbody>
+      <tr><td><code>EG</code> (Bề mặt đường cũ)</td><td>Surface</td><td><strong>Có</strong></td><td>Mặt mà khối bám theo. Thiếu mặt này → sub <strong>không vẽ gì</strong>.</td></tr>
+      <tr><td><code>TL</code> (Target mép trái)</td><td>Offset</td><td>Không</td><td>(Dành sẵn) Mục tiêu offset mép trái</td></tr>
+      <tr><td><code>TR</code> (Target mép phải)</td><td>Offset</td><td>Không</td><td>(Dành sẵn) Mục tiêu offset mép phải</td></tr>
+    </tbody>
+  </table>
+  <div class="note"><strong>Lưu ý quan trọng:</strong> Phiên bản hiện tại <strong>chưa tiêu thụ</strong> <code>TL</code>/<code>TR</code> lúc tính toán — bề rộng luôn lấy theo <code>WL</code>/<code>WR</code>. Hai target này chỉ hiện sẵn trong danh sách. Nếu cần khối chạy bám theo offset target (như bản SAC gốc), xem mục 7.</div>
+
+  <h2 id="s5">5. Đầu ra (Codes)</h2>
+  <p>Để hiển thị/đặt khối lượng đúng, các code sau <strong>phải có trong Code Set Style</strong> đang dùng:</p>
+  <ul>
+    <li><strong>Shape code:</strong> <code>KCDC</code> (hoặc trị <code>CS</code> bạn nhập) — gán material/hatch cho khối kết cấu.</li>
+    <li><strong>Link codes:</strong> <code>MDC</code> (mặt trên, hoặc trị <code>CL</code>), <code>DayDC</code> (mặt đáy), <code>V-DC</code> (vách).</li>
+  </ul>
+  <p>Nếu code chưa khai trong Code Set Style, Civil 3D vẫn dựng hình nhưng không hiển thị nét/màu theo style và <strong>không gom được khối lượng</strong> theo shape đó.</p>
+
+  <h2 id="s6">6. Quy trình dùng nhanh</h2>
+  <ol>
+    <li><strong>Nạp sub vào palette:</strong> chạy lệnh import của add-in (đổ <code>.pkt</code>/<code>.atc</code> vào tool palette).</li>
+    <li><strong>Tạo Assembly:</strong> <kbd>CreateAssembly</kbd> → đặt baseline.</li>
+    <li><strong>Gắn sub:</strong> chọn <em>Kết cấu đường cũ</em> trên palette → click vào marker trên assembly.</li>
+    <li><strong>Chỉnh tham số:</strong> chọn sub → Properties → đặt <code>WL</code>, <code>WR</code>, <code>H</code>, <code>CL</code>, <code>CS</code>.</li>
+    <li><strong>Tạo Corridor</strong> với assembly này + alignment + profile.</li>
+    <li><strong>Gán target <code>EG</code></strong> = mặt đường cũ (Surface). <em>(TL/TR bỏ trống.)</em></li>
+    <li><strong>Rebuild Corridor.</strong> Khối kết cấu xuất hiện bám mặt đường cũ.</li>
+    <li><strong>Code Set Style:</strong> đảm bảo có <code>KCDC</code>, <code>MDC</code>, <code>DayDC</code>, <code>V-DC</code>.</li>
+  </ol>
+
+  <h2 id="s7">7. Tùy biến &amp; giới hạn đã biết</h2>
+  <p><strong>Bước sample mặt (<code>SampleStep = 0.5 m</code>).</strong> Mặt trên/đáy là polyline lấy mẫu đều 0.5 m theo offset (xấp xỉ <code>StripSurface</code> của SAC, vốn chèn đỉnh tại mỗi giao tuyến TIN). Muốn bám TIN mịn hơn → giảm <code>SampleStep</code> xuống 0.25 hoặc 0.1 m trong class (đánh đổi: nhiều điểm/link hơn, corridor nặng hơn).</p>
+  <p><strong>Dùng offset target TL/TR.</strong> Cần đọc offset từ target tại từng station và thay cho <code>WL</code>/<code>WR</code> ở chỗ đánh dấu <code>// TODO(offset target)</code> trong code. API offset-target tùy framework; chưa bật mặc định.</p>
+  <p><strong>Layout mode.</strong> Khi xem trên Assembly (chưa có surface), sub vẽ <strong>khối chữ nhật phẳng</strong> đúng <code>WL</code>/<code>WR</code>/<code>H</code> để preview hình dạng. Hình bám-địa-hình chỉ xuất hiện khi corridor có target <code>EG</code>.</p>
+  <p><strong>Bắt buộc có <code>EG</code>.</strong> Không gán surface → sub thoát, không tạo hình. Đây là chủ đích (tránh dựng khối rác khi thiếu dữ liệu).</p>
+
+  <h2 id="s8">8. Xử lý sự cố</h2>
+  <table>
+    <thead><tr><th>Hiện tượng</th><th>Nguyên nhân thường gặp</th><th>Cách xử lý</th></tr></thead>
+    <tbody>
+      <tr><td>Không thấy khối sau rebuild</td><td>Chưa gán target <code>EG</code></td><td>Gán Surface đường cũ vào <code>EG</code></td></tr>
+      <tr><td>Khối chỉ là chữ nhật phẳng</td><td>Đang ở chế độ preview Assembly (Layout)</td><td>Xem trong Corridor đã build, không phải trên Assembly</td></tr>
+      <tr><td>Có hình nhưng không màu/không ra khối lượng</td><td>Code <code>KCDC</code>/<code>MDC</code>/<code>DayDC</code>/<code>V-DC</code> chưa có trong Code Set Style</td><td>Bổ sung code vào Code Set Style</td></tr>
+      <tr><td>Khối "răng cưa" thô</td><td><code>SampleStep</code> quá lớn so với địa hình</td><td>Giảm <code>SampleStep</code></td></tr>
+      <tr><td>Khối lệch trái/phải</td><td><code>WL</code>/<code>WR</code> sai, hoặc điểm gắn không đúng marker</td><td>Kiểm tra lại điểm gắn và <code>WL</code>/<code>WR</code></td></tr>
+      <tr><td><code>H</code> không ăn</td><td>Nhập <code>H</code> ≤ 0 (tự quy về 0.3)</td><td>Nhập <code>H</code> &gt; 0</td></tr>
+    </tbody>
+  </table>
+
+  <footer>Tài liệu mô tả đúng hành vi class <code>DuongCuSubAssembly</code> hiện tại. Khi đổi <code>SampleStep</code> hoặc bật offset target trong code, cập nhật lại mục 4 và 7.</footer>
+
+</div>
+</body>
+</html>

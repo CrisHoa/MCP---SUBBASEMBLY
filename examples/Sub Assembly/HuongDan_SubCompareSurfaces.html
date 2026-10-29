@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hướng dẫn — Subassembly So sánh bề mặt (CompareSurfaces)</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --ink:#e6e8ec; --muted:#9aa3b2;
+    --line:#272c36; --accent:#4ea1ff; --warn:#ffb454; --code:#1b1f27;
+    --th:#1d2230; --zebra:#13161c; --good:#5fd38d;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;}
+  .wrap{max-width:880px; margin:0 auto; padding:40px 24px 80px}
+  h1{font-size:26px; line-height:1.25; margin:0 0 6px}
+  h2{font-size:19px; margin:38px 0 12px; padding-bottom:8px; border-bottom:1px solid var(--line)}
+  h3{font-size:15px; margin:22px 0 8px}
+  p{margin:10px 0}
+  a{color:var(--accent); text-decoration:none}
+  a:hover{text-decoration:underline}
+  .sub{color:var(--muted); margin:0 0 4px}
+  .meta{background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--accent);
+    border-radius:8px; padding:12px 16px; margin:18px 0 8px; color:var(--muted); font-size:14px}
+  .meta code{color:var(--ink)}
+  code,kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em}
+  :not(pre)>code{background:var(--code); border:1px solid var(--line); border-radius:5px; padding:1px 6px; color:#cfe0ff}
+  pre{background:var(--code); border:1px solid var(--line); border-radius:10px;
+    padding:16px; overflow:auto; line-height:1.45; color:#c9d3e0; font-size:13px}
+  table{border-collapse:collapse; width:100%; margin:14px 0; font-size:14px}
+  th,td{border:1px solid var(--line); padding:8px 11px; text-align:left; vertical-align:top}
+  th{background:var(--th); font-weight:600}
+  tbody tr:nth-child(even){background:var(--zebra)}
+  td code{white-space:nowrap}
+  ol,ul{padding-left:22px} li{margin:5px 0}
+  .note{background:rgba(255,180,84,.08); border:1px solid rgba(255,180,84,.35);
+    border-left:3px solid var(--warn); border-radius:8px; padding:12px 16px; margin:14px 0}
+  .note strong{color:var(--warn)}
+  .ok{background:rgba(95,211,141,.07); border:1px solid rgba(95,211,141,.3);
+    border-left:3px solid var(--good); border-radius:8px; padding:12px 16px; margin:14px 0}
+  .ok strong{color:var(--good)}
+  .toc{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 18px; margin:22px 0}
+  .toc ol{margin:6px 0 0; padding-left:20px}
+  .toc a{color:var(--ink)}
+  .pill{display:inline-block; font-size:12px; padding:1px 8px; border-radius:20px; border:1px solid var(--line); color:var(--muted)}
+  footer{margin-top:46px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:13px; font-style:italic}
+  @media print{ body{background:#fff;color:#000} .wrap{max-width:100%} pre,code,th,.meta,.note,.ok,.toc{background:#f5f5f5;color:#000} a{color:#000} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Subassembly — SO SÁNH BỀ MẶT (CompareSurfaces)</h1>
+  <p class="sub">Hướng dẫn sử dụng</p>
+
+  <div class="meta">
+    Class: <code>SACVisualInfra._04.SoBeSurface.CompareSurfaces</code><br>
+    Lấy bao hình (envelope) cao nhất / thấp nhất từ tối đa 5 bề mặt — adaptive sampling.
+  </div>
+
+  <div class="toc">
+    <strong>Mục lục</strong>
+    <ol>
+      <li><a href="#s1">Công dụng &amp; nguyên lý</a></li>
+      <li><a href="#s2">Điểm gắn &amp; Targets</a></li>
+      <li><a href="#s3">Tham số (Parameters)</a></li>
+      <li><a href="#s4">Tham số đầu ra (Output)</a></li>
+      <li><a href="#s5">Đầu ra hình học (Codes)</a></li>
+      <li><a href="#s6">Quy trình dùng nhanh</a></li>
+      <li><a href="#s7">Precision &amp; giới hạn</a></li>
+      <li><a href="#s8">Xử lý sự cố</a></li>
+    </ol>
+  </div>
+
+  <h2 id="s1">1. Công dụng &amp; nguyên lý</h2>
+  <p>Tại mỗi mặt cắt, sub truy vấn đồng thời <strong>tối đa 5 bề mặt</strong> trong một khoảng offset rồi vẽ <strong>một đường bao</strong> bám theo bề mặt <strong>cao nhất (Max)</strong> hoặc <strong>thấp nhất (Min)</strong> tại từng điểm. Hữu ích khi cần ghép nhiều mặt khảo sát/đường cũ thành một đường “trên cùng” hoặc “dưới cùng”, hoặc trích cao độ max/min dọc tuyến.</p>
+  <p>Lấy mẫu <strong>thích nghi (adaptive subdivision)</strong> thay vì chia đều: bắt đầu 2 điểm (start/end), chia đôi đoạn khi (a) tập bề mặt tồn tại đổi tại điểm giữa → tự bắt biên, hoặc (b) cao độ điểm giữa lệch nội suy tuyến tính &gt; 3 mm → bám mái dốc. Dừng khi đạt độ sâu <code>Precision</code>.</p>
+  <ul>
+    <li>Vùng phẳng: chỉ 2–3 điểm → rất nhẹ.</li>
+    <li>Gần biên bề mặt: tự chia nhỏ → biên chính xác tới <code>range / 2^depth</code>.</li>
+    <li>Tại biên (một mặt bắt đầu/kết thúc) sinh <strong>đoạn thẳng đứng</strong> nối bậc cao độ.</li>
+  </ul>
+<pre>offset Start ●─────────────────────────────● offset End
+   S1 ‾‾‾‾‾‾\__________________
+   S2          ‾‾‾‾‾‾‾‾‾‾\________________
+   ⇒ Max:  ‾‾‾‾‾‾\______‾‾‾‾‾‾\___________   (đường bao "CompSurf")
+                        |  ← đoạn đứng "CompSurfVert" tại biên</pre>
+
+  <h2 id="s2">2. Điểm gắn &amp; Targets</h2>
+  <p><strong>Điểm gắn:</strong> origin của sub trong assembly. Khoảng so sánh tính từ tim theo <code>StartOffset</code>→<code>EndOffset</code>, phía trái/phải do tham số <code>Side</code> quyết định.</p>
+  <p>Gán ở tab <strong>Target Parameters</strong> của corridor:</p>
+  <table>
+    <thead><tr><th>Target</th><th>Loại</th><th>Bắt buộc</th><th>Vai trò</th></tr></thead>
+    <tbody>
+      <tr><td><code>Surface1</code> (Bề mặt 1)</td><td>Surface</td><td><strong>Có</strong></td><td>Bề mặt đầu tiên. Không gán mặt nào → sub không vẽ gì.</td></tr>
+      <tr><td><code>Surface2…Surface5</code></td><td>Surface</td><td>Không</td><td>Các bề mặt bổ sung để so sánh. Gán bao nhiêu tùy nhu cầu.</td></tr>
+    </tbody>
+  </table>
+  <div class="ok"><strong>Mask theo từng điểm:</strong> tại mỗi offset chỉ những bề mặt <em>thực sự tồn tại</em> ở đó mới tham gia tính Max/Min. Nhờ vậy ghép được các mặt phủ không cùng phạm vi.</div>
+
+  <h2 id="s3">3. Tham số (Parameters)</h2>
+  <table>
+    <thead><tr><th>Tên</th><th>Hiển thị</th><th>Mặc định</th><th>Ý nghĩa</th></tr></thead>
+    <tbody>
+      <tr><td><code>Mode</code></td><td>Chế độ (0=Max, 1=Min)</td><td>0</td><td>0 = lấy bề mặt cao nhất; 1 = lấy thấp nhất.</td></tr>
+      <tr><td><code>Side</code></td><td>Phía</td><td>Right</td><td>Trái = offset âm, Phải = offset dương.</td></tr>
+      <tr><td><code>StartOffset</code></td><td>Offset bắt đầu (m, từ tim)</td><td>0.0</td><td>Mốc đầu khoảng so sánh (độ lớn từ tim).</td></tr>
+      <tr><td><code>EndOffset</code></td><td>Offset kết thúc (m, từ tim)</td><td>10.0</td><td>Mốc cuối khoảng so sánh.</td></tr>
+      <tr><td><code>Precision</code></td><td>Độ chính xác (6=thô, 8=chuẩn, 10=chi tiết)</td><td>20</td><td>Độ sâu chia đôi tối đa. Xem mục 7.</td></tr>
+    </tbody>
+  </table>
+  <div class="note"><strong>Lưu ý <code>Side</code>:</strong> <code>StartOffset</code>/<code>EndOffset</code> là <em>độ lớn</em> tính từ tim; dấu do <code>Side</code> áp vào (Trái → nhân −1). Đặt <code>Side=Left</code> để so sánh nửa trái mặt cắt.</div>
+
+  <h2 id="s4">4. Tham số đầu ra (Output)</h2>
+  <p>Sub xuất 3 giá trị read-only, dùng được làm <strong>input cho sub khác</strong> hoặc để gán nhãn:</p>
+  <table>
+    <thead><tr><th>Tên</th><th>Hiển thị</th><th>Ý nghĩa</th></tr></thead>
+    <tbody>
+      <tr><td><code>MaxElev</code></td><td>Cao độ cao nhất trong khoảng (m tuyệt đối)</td><td>Cao độ lớn nhất của đường bao trong [Start, End].</td></tr>
+      <tr><td><code>MinElev</code></td><td>Cao độ thấp nhất trong khoảng (m tuyệt đối)</td><td>Cao độ nhỏ nhất của đường bao.</td></tr>
+      <tr><td><code>SampleCount</code></td><td>Số điểm adaptive đã lấy mẫu (debug)</td><td>Đếm số lần truy vấn — dùng kiểm tra hiệu năng/độ mịn.</td></tr>
+    </tbody>
+  </table>
+  <p><code>MaxElev</code>/<code>MinElev</code> là cao độ <strong>tuyệt đối</strong> (đã cộng lại cao độ gốc), không phải cao độ tương đối của điểm sub.</p>
+
+  <h2 id="s5">5. Đầu ra hình học (Codes)</h2>
+  <p>Khai trong Code Set Style để hiển thị đúng:</p>
+  <ul>
+    <li><strong>Link codes:</strong> <code>CompSurf</code> (đoạn bám bề mặt), <code>CompSurfVert</code> (đoạn thẳng đứng tại biên).</li>
+    <li><strong>Point codes:</strong> <code>CompSurf</code>, <code>CompSurfVert</code>, <code>CompSurfStart</code> (điểm đầu), <code>CompSurfEnd</code> (điểm cuối).</li>
+    <li><strong>Shape code:</strong> <code>CompSurf</code> — toàn bộ đường bao được thêm dưới dạng shape (tiện gán style/feature line).</li>
+  </ul>
+
+  <h2 id="s6">6. Quy trình dùng nhanh</h2>
+  <ol>
+    <li><strong>Gắn sub</strong> vào marker trong Assembly (thường tại tim).</li>
+    <li><strong>Đặt tham số:</strong> <code>Mode</code> (Max/Min), <code>Side</code>, <code>StartOffset</code>, <code>EndOffset</code>, <code>Precision</code>.</li>
+    <li><strong>Tạo Corridor</strong>; gán ít nhất <code>Surface1</code>, thêm <code>Surface2…5</code> nếu cần.</li>
+    <li><strong>Rebuild.</strong> Đường bao Max/Min hiện theo từng mặt cắt.</li>
+    <li><strong>Code Set Style:</strong> có <code>CompSurf</code>, <code>CompSurfVert</code> (và point start/end nếu muốn).</li>
+    <li><strong>Dùng output</strong> <code>MaxElev</code>/<code>MinElev</code> cho sub kế tiếp hoặc label nếu cần.</li>
+  </ol>
+
+  <h2 id="s7">7. Precision &amp; giới hạn</h2>
+  <p><strong>Precision = độ sâu chia đôi tối đa</strong> (kẹp tối thiểu 4). Đoạn nhỏ nhất ≈ <code>(End−Start) / 2^Precision</code>:</p>
+  <table>
+    <thead><tr><th>Precision</th><th>Đoạn nhỏ nhất (range 10 m)</th><th>Ghi chú</th></tr></thead>
+    <tbody>
+      <tr><td>6</td><td>~0.16 m</td><td>Thô, nhanh</td></tr>
+      <tr><td>8</td><td>~0.04 m</td><td>Chuẩn <span class="pill">khuyến nghị</span></td></tr>
+      <tr><td>10</td><td>~0.01 m</td><td>Chi tiết, chậm hơn</td></tr>
+    </tbody>
+  </table>
+  <div class="note"><strong>Mặc định trong code là <code>20</code></strong> (rất mịn, có thể tốn truy vấn ở tuyến dài/nhiều mặt). Cân nhắc đặt lại <code>8</code> cho phần lớn trường hợp; theo dõi <code>SampleCount</code> để chỉnh.</div>
+  <p><strong>Ngưỡng phẳng cố định 3 mm</strong> (ElevTol): đoạn lệch nội suy &lt; 3 mm sẽ không chia thêm. Đây là hằng số trong code, không có tham số ngoài.</p>
+  <p><strong>Layout mode:</strong> trên Assembly (chưa có surface) sub vẽ schematic đường thẳng theo Start/End để preview; đường bao thật chỉ ra khi corridor có target surface.</p>
+
+  <h2 id="s8">8. Xử lý sự cố</h2>
+  <table>
+    <thead><tr><th>Hiện tượng</th><th>Nguyên nhân thường gặp</th><th>Cách xử lý</th></tr></thead>
+    <tbody>
+      <tr><td>Không vẽ gì sau rebuild</td><td>Chưa gán <code>Surface1</code>, hoặc khoảng offset nằm ngoài mọi bề mặt</td><td>Gán ít nhất Surface1; kiểm tra Start/End phủ lên bề mặt</td></tr>
+      <tr><td>Đường bao sai phía mặt cắt</td><td><code>Side</code> đặt sai</td><td>Đổi <code>Side</code> Trái/Phải</td></tr>
+      <tr><td>Lấy nhầm mặt cao/thấp</td><td><code>Mode</code> ngược</td><td>0 = Max, 1 = Min</td></tr>
+      <tr><td>Biên giữa các mặt bị “cắt góc”</td><td><code>Precision</code> quá thấp</td><td>Tăng Precision (8→10)</td></tr>
+      <tr><td>Corridor build chậm</td><td><code>Precision</code> quá cao (vd 20) trên tuyến dài</td><td>Hạ Precision; xem <code>SampleCount</code></td></tr>
+      <tr><td>Có đường nhưng không màu/không style</td><td>Code <code>CompSurf</code>/<code>CompSurfVert</code> chưa khai</td><td>Bổ sung vào Code Set Style</td></tr>
+      <tr><td><code>MaxElev</code>/<code>MinElev</code> = 0</td><td>Khoảng không trúng bề mặt nào → không có điểm hợp lệ</td><td>Kiểm tra phạm vi offset &amp; bề mặt</td></tr>
+    </tbody>
+  </table>
+
+  <footer>Tài liệu mô tả đúng hành vi class <code>CompareSurfaces</code> hiện tại (tối đa 5 bề mặt, ElevTol 3 mm, Precision mặc định 20). Nếu đổi default Precision hoặc ElevTol trong code, cập nhật lại mục 3 &amp; 7.</footer>
+
+</div>
+</body>
+</html>

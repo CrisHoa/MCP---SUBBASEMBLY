@@ -1,0 +1,93 @@
+[
+  {
+    "index": "01",
+    "name": "PhuiDaoCong",
+    "file": "01_PhuiDaoCong.pkt",
+    "title": "Phui đào cống thoát nước & Công trình ngầm",
+    "parameters_count": 7,
+    "size_kb": 4.61,
+    "pkt_path": "C:\\Users\\Admin\\Desktop\\MCP - SUBBASEMBLY\\examples\\Sub Assembly\\Bo_7_Subassembly_Chuan\\01_PhuiDaoCong\\01_PhuiDaoCong.pkt",
+    "sac_editable_pkt_path": "C:\\Users\\Admin\\Desktop\\MCP - SUBBASEMBLY\\examples\\Sub Assembly\\Bo_7_Subassembly_Chuan\\01_PhuiDaoCong\\01_PhuiDaoCong.pkt",
+    "parameter_count": 7,
+    "html_help": "PhuiCong_Help.html",
+    "image": "PipeTrench.png"
+  },
+  {
+    "index": "02",
+    "name": "VetHuuCo_DanhCap",
+    "file": "02_VetHuuCo_DanhCap.pkt",
+    "title": "Vét hữu cơ & Đánh cấp nền đường",
+    "parameters_count": 14,
+    "size_kb": 5.41,
+    "pkt_path": "C:\\Users\\Admin\\Desktop\\MCP - SUBBASEMBLY\\examples\\Sub Assembly\\Bo_7_Subassembly_Chuan\\02_VetHuuCo_DanhCap\\02_VetHuuCo_DanhCap.pkt",
+    "sac_editable_pkt_path": "C:\\Users\\Admin\\Desktop\\MCP - SUBBASEMBLY\\examples\\Sub Assembly\\Bo_7_Subassembly_Chuan\\02_VetHuuCo_DanhCap\\02_VetHuuCo_DanhCap.pkt",
+    "parameter_count": 14,
+    "html_help": "Help_DCVHC.html",
+    "image": "StripBench.png"
+  },
+  {
+    "index": "03",
+    "name": "SoSanhBeMat",
+    "file": "03_SoSanhBeMat.pkt",
+    "title": "So sánh bề mặt địa hình TIN",
+    "parameters_count": 6,
+    "size_kb": 4.34,
+    "pkt_path": "C:\\Users\\Admin\\Desktop\\MCP - SUBBASEMBLY\\examples\\Sub Assembly\\Bo_7_Subassembly_Chuan\\03_SoSanhBeMat\\03_SoSanhBeMat.pkt",
+    "sac_editable_pkt_path": "C:\\Users\\Admin\\Desktop\\MCP - SUBBASEMBLY\\examples\\Sub Assembly\\Bo_7_Subassembly_Chuan\\03_SoSanhBeMat\\03_SoSanhBeMat.pkt",
+    "parameter_count": 6,
+    "html_help": "HuongDan_SubCompareSurfaces.html",
+    "image": "CompareSurface.png"
+  },
+  {
+    "index": "04",
+    "name": "KetCauDuongCu",
+    "file": "04_KetCauDuongCu.pkt",
+    "title": "Kết cấu áo đường hiện hữu",
+    "parameters_count": 5,
+    "size_kb": 4.2,
+    "pkt_path": "C:\\Users\\Admin\\Desktop\\MCP - SUBBASEMBLY\\examples\\Sub Assembly\\Bo_7_Subassembly_Chuan\\04_KetCauDuongCu\\04_KetCauDuongCu.pkt",
+    "sac_editable_pkt_path": "C:\\Users\\Admin\\Desktop\\MCP - SUBBASEMBLY\\examples\\Sub Assembly\\Bo_7_Subassembly_Chuan\\04_KetCauDuongCu\\04_KetCauDuongCu.pkt",
+    "parameter_count": 5,
+    "html_help": "HuongDan_SubDuongCu.html",
+    "image": "DuongCu.png"
+  },
+  {
+    "index": "05",
+    "name": "TaluyDaoDapDayDu",
+    "file": "05_TaluyDaoDapDayDu.pkt",
+    "title": "Mái taluy đào đắp đầy đủ, cơ taluy và rãnh biên",
+    "parameters_count": 70,
+    "size_kb": 6.11,
+    "pkt_path": "C:\\Users\\Admin\\Desktop\\MCP - SUBBASEMBLY\\examples\\Sub Assembly\\Bo_7_Subassembly_Chuan\\05_TaluyDaoDapDayDu\\05_TaluyDaoDapDayDu.pkt",
+    "sac_editable_pkt_path": "C:\\Users\\Admin\\Desktop\\MCP - SUBBASEMBLY\\examples\\Sub Assembly\\Bo_7_Subassembly_Chuan\\05_TaluyDaoDapDayDu\\05_TaluyDaoDapDayDu.pkt",
+    "parameter_count": 70,
+    "html_help": "Help_Taluy.html",
+    "image": "TaluyFull.png"
+  },
+  {
+    "index": "06",
+    "name": "DuongNangCapCaiTao",
+    "file": "06_DuongNangCapCaiTao.pkt",
+    "title": "Kết cấu áo đường nâng cấp, bù vênh & mở rộng",
+    "parameters_count": 22,
+    "size_kb": 4.77,
+    "pkt_path": "C:\\Users\\Admin\\Desktop\\MCP - SUBBASEMBLY\\examples\\Sub Assembly\\Bo_7_Subassembly_Chuan\\06_DuongNangCapCaiTao\\06_DuongNangCapCaiTao.pkt",
+    "sac_editable_pkt_path": "C:\\Users\\Admin\\Desktop\\MCP - SUBBASEMBLY\\examples\\Sub Assembly\\Bo_7_Subassembly_Chuan\\06_DuongNangCapCaiTao\\06_DuongNangCapCaiTao.pkt",
+    "parameter_count": 22,
+    "html_help": "HuongDan_NangCapCaiTao.html",
+    "image": "NangCapCaiTao.png"
+  },
+  {
+    "index": "07",
+    "name": "KetCauMatDuongMoi",
+    "file": "07_KetCauMatDuongMoi.pkt",
+    "title": "Kết cấu mặt đường mới (5 lớp bậc thang)",
+    "parameters_count": 15,
+    "size_kb": 4.43,
+    "pkt_path": "C:\\Users\\Admin\\Desktop\\MCP - SUBBASEMBLY\\examples\\Sub Assembly\\Bo_7_Subassembly_Chuan\\07_KetCauMatDuongMoi\\07_KetCauMatDuongMoi.pkt",
+    "sac_editable_pkt_path": "C:\\Users\\Admin\\Desktop\\MCP - SUBBASEMBLY\\examples\\Sub Assembly\\Bo_7_Subassembly_Chuan\\07_KetCauMatDuongMoi\\07_KetCauMatDuongMoi.pkt",
+    "parameter_count": 15,
+    "html_help": "HuongDan_KetCauMatDuongMoi.html",
+    "image": "KetCauMoi.png"
+  }
+]

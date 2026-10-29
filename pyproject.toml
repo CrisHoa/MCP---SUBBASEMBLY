@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sac-mcp-server"
+version = "0.1.0"
+description = "Model Context Protocol (MCP) Server for Autodesk Civil 3D Subassembly Composer (.pkt) - Supports Civil 3D 2025, 2026, 2027"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Civil 3D Subassembly Automation Team" }
+]
+keywords = ["civil3d", "subassembly-composer", "pkt", "mcp", "autodesk", "wf4", "xaml"]
+dependencies = [
+    "mcp[cli]>=1.2.0",
+    "pydantic>=2.5.0",
+    "lxml>=5.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[project.scripts]
+sac-mcp-server = "sac_mcp.server:main"
+sac-cli = "sac_mcp.cli:main"
+sac-validate = "sac_mcp.core.validator:main"
+
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+sac_mcp = ["templates/*.pkt"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

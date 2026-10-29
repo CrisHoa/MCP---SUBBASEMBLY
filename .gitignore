@@ -1,0 +1,37 @@
+# Python virtual environments & bytecode
+.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.pytest_cache/
+.coverage
+htmlcov/
+
+# Build artifacts & package distribution
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# IDE & OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Temporary test files
+*.tmp
+*.temp
+failed.xaml
+temp_bisect.xaml
+temp_test.pkt
+
+# Large reference archives (keep split modular pkt in examples/ and Bo_7_Subassembly)
+# Note: Keep SACVisualInfra.pkt if user wants, but track its split modules

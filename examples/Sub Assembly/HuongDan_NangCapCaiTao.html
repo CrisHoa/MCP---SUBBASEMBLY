@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hướng dẫn SubAssembly — Nâng cấp · Cải tạo · Mở rộng</title>
+<style>
+  :root{
+    --bg:#ffffff; --ink:#1a1f29; --muted:#5b6573; --line:#e1e5ea;
+    --pave1:#e63946; --pave2:#f4a261; --base:#2a9d8f; --subbase:#577590; --subg:#7d4f9a;
+    --bv:#e9c46a; --dao:#9bb1c9; --daonc:#b08968; --datum:#f5c000; --top:#222;
+    --accent:#0b6e99; --soft:#f6f8fa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+       color:var(--ink);background:var(--bg);line-height:1.6;font-size:15px}
+  .wrap{max-width:980px;margin:0 auto;padding:32px 24px 80px}
+  h1{font-size:28px;margin:0 0 4px;letter-spacing:-.3px}
+  h2{font-size:21px;margin:42px 0 14px;padding-bottom:8px;border-bottom:2px solid var(--line)}
+  h3{font-size:17px;margin:26px 0 10px;color:var(--accent)}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 8px}
+  p{margin:10px 0}
+  code{background:var(--soft);padding:1px 6px;border-radius:4px;font-size:13px;
+       font-family:"SF Mono",Consolas,Monaco,monospace}
+  .lead{background:var(--soft);border-left:4px solid var(--accent);padding:14px 18px;
+        border-radius:0 8px 8px 0;margin:18px 0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:var(--soft);font-weight:600}
+  td.c{text-align:center;white-space:nowrap}
+  .sw{display:inline-block;width:13px;height:13px;border-radius:3px;vertical-align:-1px;margin-right:6px;border:1px solid rgba(0,0,0,.15)}
+  .pill{display:inline-block;font-size:12px;padding:1px 8px;border-radius:20px;font-weight:600}
+  .pill.shape{background:#eef6ff;color:#0b6e99}
+  .pill.link{background:#fff3e8;color:#b5651d}
+  .pill.point{background:#eefbf2;color:#1d8a4e}
+  figure{margin:22px 0;text-align:center}
+  figcaption{font-size:13px;color:var(--muted);margin-top:8px}
+  .svgbox{border:1px solid var(--line);border-radius:10px;background:#fbfcfd;padding:10px;overflow-x:auto}
+  ol li,ul li{margin:6px 0}
+  .note{font-size:13px;color:var(--muted)}
+  .warn{background:#fff7e6;border:1px solid #ffd98a;border-radius:8px;padding:12px 16px;margin:16px 0;font-size:14px}
+  .toc{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:14px 20px;margin:20px 0}
+  .toc a{color:var(--accent);text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+  .legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:12px 0;font-size:13px}
+  .legend span{white-space:nowrap}
+  .kbd{font-family:monospace;background:#1a1f29;color:#fff;padding:1px 7px;border-radius:4px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>SubAssembly: Nâng cấp · Cải tạo · Mở rộng</h1>
+  <p class="sub">Tài liệu hướng dẫn sử dụng — Civil 3D Corridor · 5 lớp kết cấu · bù vênh nền cũ · mở rộng bậc thang · đào theo địa hình tự nhiên</p>
+
+  <div class="lead">
+    Một subassembly gắn tại <strong>tim đường</strong> dựng đồng thời <strong>cả hai bên</strong> Trái và Phải.
+    Sub tự suy cao độ mặt mới, rải 5 lớp kết cấu, bù vênh chỗ nền cũ thiếu chiều dày, mở rộng kết cấu theo bậc
+    nhiều lớp, và tạo các shape đào (đào mở rộng theo mặt tự nhiên, đào nền cũ nhô lên) để bóc khối lượng.
+  </div>
+
+  <div class="toc">
+    <strong>Nội dung</strong>
+    <ol style="margin:8px 0 0">
+      <li><a href="#tongquan">Tổng quan &amp; nguyên lý</a></li>
+      <li><a href="#sodo">Sơ đồ mặt cắt — Point / Link / Shape code</a></li>
+      <li><a href="#target">Targets (đối tượng tham chiếu)</a></li>
+      <li><a href="#param">Diễn giải đầy đủ Parameters (theo ATC)</a></li>
+      <li><a href="#shape">Bảng Shape code</a></li>
+      <li><a href="#link">Bảng Link code</a></li>
+      <li><a href="#point">Bảng Point code</a></li>
+      <li><a href="#cachdung">Cách sử dụng từng bước</a></li>
+    </ol>
+  </div>
+
+  <!-- ============ 1. TỔNG QUAN ============ -->
+  <h2 id="tongquan">1. Tổng quan &amp; nguyên lý hoạt động</h2>
+
+  <p>Điểm gắn (attachment) đặt tại <strong>tim tuyến</strong>. Vì cao độ mặt mới tại tim được suy ra từ
+  điểm khống chế chung của cả hai bên, nên sub <strong>bắt buộc dựng cả Trái lẫn Phải</strong> trong một lần.</p>
+
+  <h3>Hai chế độ cao độ tim (tham số <code>Mode_Crown</code>)</h3>
+  <table>
+    <tr><th style="width:170px">Chế độ</th><th>Hành vi</th></tr>
+    <tr>
+      <td><strong>Theo nền cũ</strong><br><span class="note">Mode_Crown = 0 (mặc định)</span></td>
+      <td>Cao độ tim <code>C</code> được nâng lên sao cho mọi điểm trên nền cũ đều có tối thiểu
+      <code>MinStruct + MinBuVenh</code> chiều dày kết cấu phủ lên. Mặt mới luôn nằm trên nền cũ — không có đào nền cũ.</td>
+    </tr>
+    <tr>
+      <td><strong>Theo profile tuyến</strong><br><span class="note">Mode_Crown = 1</span></td>
+      <td>Cao độ tim bám đúng <strong>profile thiết kế</strong> của tuyến (cao độ marker). Nếu nền cũ nhô cao hơn mặt
+      mới ở vài chỗ, phần nhô đó được <strong>đào bỏ</strong> (shape <code>S_Đào NềnCũ</code>).</td>
+    </tr>
+  </table>
+
+  <h3>Cơ chế rải lớp &amp; bù vênh (vùng phủ trên nền cũ)</h3>
+  <ul>
+    <li><strong>Đủ chiều dày</strong> → rải lớp kết cấu bình thường (<code>Pave1…SubGrade</code>).</li>
+    <li><strong>Thiếu chiều dày</strong> (khe hở giữa mặt mới và nền cũ &lt; tổng lớp) → phần thiếu của lớp tách ra thành
+    <code>BuVenh_*</code> (bù vênh cho lớp tương ứng).</li>
+    <li><strong>Khe hở sâu hơn tổng kết cấu</strong> → phần dưới cùng thành bù vênh sâu tới mặt nền cũ.</li>
+  </ul>
+
+  <h3>Cơ chế mở rộng (vùng ngoài mép nền cũ)</h3>
+  <p>Từ mép nối (<code>offJoin = mép nền cũ − b2</code>) ra phía ngoài, kết cấu được dựng đầy đủ 5 lớp dạng
+  <strong>bậc thang</strong>: mỗi lớp dưới rộng hơn lớp trên một đoạn <code>mr2…mr5</code>, mặt bậc nghiêng theo
+  <code>i_mr</code>. Phần mặt tự nhiên (EG) nằm trên đáy kết cấu mở rộng được đào — shape <code>S_Đào MR</code>.</p>
+
+  <!-- ============ 2. SƠ ĐỒ ============ -->
+  <h2 id="sodo">2. Sơ đồ mặt cắt — Point / Link / Shape code</h2>
+  <p>Sơ đồ minh hoạ <strong>một bên</strong> (bên Phải). Bên Trái đối xứng qua tim. Crown nằm tại tim tuyến.</p>
+
+  <div class="legend">
+    <span><span class="sw" style="background:var(--pave1)"></span>Pave1</span>
+    <span><span class="sw" style="background:var(--pave2)"></span>Pave2</span>
+    <span><span class="sw" style="background:var(--base)"></span>Base</span>
+    <span><span class="sw" style="background:var(--subbase)"></span>SubBase</span>
+    <span><span class="sw" style="background:var(--subg)"></span>SubGrade</span>
+    <span><span class="sw" style="background:var(--bv)"></span>BuVenh_*</span>
+    <span><span class="sw" style="background:var(--dao)"></span>S_Đào MR</span>
+    <span><span class="sw" style="background:var(--daonc)"></span>S_Đào NềnCũ</span>
+    <span><span class="sw" style="background:var(--datum)"></span>Datum (link vàng)</span>
+  </div>
+
+  <figure>
+  <div class="svgbox">
+  <svg viewBox="0 0 900 520" xmlns="http://www.w3.org/2000/svg" font-family="monospace" font-size="12">
+    <!-- baseline grid -->
+    <defs>
+      <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L6,3 L0,6 Z" fill="#888"/>
+      </marker>
+    </defs>
+
+    <!-- ===== Vùng MỞ RỘNG bậc thang (bên phải) ===== -->
+    <!-- tọa độ minh hoạ, không tỉ lệ thật -->
+    <!-- mặt top -->
+    <!-- crown -->
+    <text x="120" y="80" fill="#444">TIM (Crown)</text>
+    <line x1="160" y1="92" x2="160" y2="470" stroke="#bbb" stroke-dasharray="4 4"/>
+
+    <!-- ====== khối phủ trên nền cũ (overlay) ====== -->
+    <!-- Pave1 overlay -->
+    <polygon points="160,120 360,140 360,158 160,138" fill="var(--pave1)" opacity=".85"/>
+    <polygon points="160,138 360,158 360,180 160,160" fill="var(--pave2)" opacity=".85"/>
+    <polygon points="160,160 360,180 360,214 160,196" fill="var(--base)" opacity=".85"/>
+    <polygon points="160,196 360,214 360,250 160,236" fill="var(--subbase)" opacity=".85"/>
+    <polygon points="160,236 360,250 360,286 160,278" fill="var(--subg)" opacity=".85"/>
+    <!-- nền cũ (đường nâu mảnh dưới khối overlay) -->
+    <path d="M160,300 Q260,288 360,295" fill="none" stroke="var(--daonc)" stroke-width="2"/>
+    <text x="200" y="320" fill="var(--daonc)">nền cũ (OldRoad)</text>
+
+    <!-- ====== khối MỞ RỘNG bậc thang (từ offJoin ra ngoài) ====== -->
+    <!-- mép nối -->
+    <line x1="360" y1="120" x2="360" y2="300" stroke="#999" stroke-dasharray="3 3"/>
+    <text x="330" y="112" fill="#666">offJoin = mép cũ − b2</text>
+
+    <!-- Pave1 mở rộng: P1.. -->
+    <polygon points="360,140 470,150 478,150 470,168 360,158" fill="var(--pave1)"/>
+    <!-- Pave2 mở rộng -->
+    <polygon points="360,158 470,168 530,172 538,172 530,190 360,180" fill="var(--pave2)"/>
+    <!-- Base mở rộng -->
+    <polygon points="360,180 530,190 590,196 598,196 590,230 360,214" fill="var(--base)"/>
+    <!-- SubBase mở rộng -->
+    <polygon points="360,214 590,230 650,236 658,236 650,272 360,250" fill="var(--subbase)"/>
+    <!-- SubGrade mở rộng -->
+    <polygon points="360,250 650,272 710,278 360,286" fill="var(--subg)"/>
+
+    <!-- ===== Shape S_Đào MR (mặt tự nhiên EG trên đáy mở rộng) ===== -->
+    <path d="M470,150 L530,172 L590,196 L650,236 L710,278"
+          fill="none" stroke="#2e7d32" stroke-width="2.2"/>
+    <text x="600" y="150" fill="#2e7d32">EG (mặt tự nhiên)</text>
+    <polygon points="470,150 478,150 530,172 538,172 590,196 598,196 650,236 658,236 710,278 650,124 540,120 478,128"
+             fill="var(--dao)" opacity=".35"/>
+    <text x="520" y="138" fill="#456">S_Đào MR</text>
+
+    <!-- ===== Point codes ===== -->
+    <g fill="#111">
+      <circle cx="160" cy="120" r="3.5"/><text x="120" y="118">P1 Crown</text>
+      <circle cx="360" cy="140" r="3.5"/><text x="364" y="136" fill="#b00">P2 ETW</text>
+      <circle cx="470" cy="150" r="3.5"/><text x="474" y="148">P16</text>
+      <circle cx="478" cy="150" r="3.5"/><text x="482" y="162" fill="#b00">P17 ETW_Pave1</text>
+      <circle cx="530" cy="172" r="3.5"/><text x="534" y="170">P18</text>
+      <circle cx="538" cy="172" r="3.5"/><text x="542" y="184" fill="#b00">P19</text>
+      <circle cx="590" cy="196" r="3.5"/><text x="594" y="194">P20</text>
+      <circle cx="598" cy="196" r="3.5"/><text x="602" y="208" fill="#b00">P21 ETW_Base</text>
+      <circle cx="650" cy="236" r="3.5"/><text x="654" y="234">P23</text>
+      <circle cx="658" cy="236" r="3.5"/><text x="662" y="248" fill="#b00">P22 ETW_Sub</text>
+      <circle cx="710" cy="278" r="3.5"/><text x="640" y="296" fill="#b00">P24 ETW_SubG</text>
+      <circle cx="360" cy="158" r="3"/><text x="300" y="156">P4</text>
+      <circle cx="360" cy="180" r="3"/><text x="300" y="178" fill="#b00">P6 Pave2</text>
+      <circle cx="360" cy="214" r="3"/><text x="300" y="212" fill="#b00">P10 Base</text>
+      <circle cx="360" cy="250" r="3"/><text x="296" y="248" fill="#b00">P13 SubBase</text>
+      <circle cx="360" cy="286" r="3"/><text x="296" y="300" fill="#b00">P15 SubGrade</text>
+    </g>
+
+    <!-- ===== Datum link (vàng) = đáy subgrade + chân ngoài ===== -->
+    <polyline points="160,286 360,286 710,278" fill="none" stroke="var(--datum)" stroke-width="3"/>
+    <text x="180" y="300" fill="#a07c00">Datum (đáy SubGrade → chân ngoài)</text>
+
+    <!-- Top link -->
+    <polyline points="160,120 360,140 470,150 530,172 590,196 650,236 710,278"
+              fill="none" stroke="var(--top)" stroke-width="1.6" opacity=".55"/>
+    <text x="170" y="112" fill="#333">Top (mặt trên) + L_Bù vênh (vùng overlay)</text>
+
+    <!-- mr labels -->
+    <line x1="470" y1="160" x2="478" y2="160" stroke="#777" marker-end="url(#arr)"/>
+    <text x="455" y="178" fill="#777" font-size="10">mr2</text>
+  </svg>
+  </div>
+  <figcaption>Mặt cắt một bên: trái = vùng phủ trên nền cũ (overlay + bù vênh), phải = vùng mở rộng bậc thang.
+  Điểm P (đen) và code điểm (đỏ) tương ứng các nút trong code. Link Datum (vàng) tạo surface đào/đắp.</figcaption>
+  </figure>
+
+  <!-- ============ 3. TARGETS ============ -->
+  <h2 id="target">3. Targets — đối tượng tham chiếu</h2>
+  <table>
+    <tr><th style="width:120px">Tên target</th><th style="width:90px">Loại</th><th>Vai trò</th><th style="width:90px">Bắt buộc</th></tr>
+    <tr><td><code>OldRoad</code></td><td>Surface</td><td>Mặt đường cũ. Dùng để bù vênh và (chế độ nền cũ) suy cao độ tim.</td><td>Khuyến nghị</td></tr>
+    <tr><td><code>EG</code></td><td>Surface</td><td>Mặt tự nhiên. Dùng tạo shape đào mở rộng <code>S_Đào MR</code>.</td><td>Tùy chọn</td></tr>
+    <tr><td><code>DG_Trai</code></td><td>Offset</td><td>Mép mặt đường mở rộng bên Trái. Nếu gán, ghi đè <code>b_Trai</code>.</td><td>Tùy chọn</td></tr>
+    <tr><td><code>DG_Phai</code></td><td>Offset</td><td>Mép mặt đường mở rộng bên Phải. Nếu gán, ghi đè <code>b_Phai</code>.</td><td>Tùy chọn</td></tr>
+  </table>
+  <p class="note">Offset target chưa gán → sub dùng <code>b_Trai</code>/<code>b_Phai</code>. Surface <code>EG</code> chưa gán →
+  không sinh shape đào mở rộng (kết cấu vẫn dựng bình thường).</p>
+
+  <!-- ============ 4. PARAMETERS ============ -->
+  <h2 id="param">4. Diễn giải đầy đủ Parameters (theo ATC)</h2>
+  <table>
+    <tr><th style="width:140px">Tham số</th><th style="width:70px">Kiểu</th><th style="width:70px">Mặc định</th><th>Ý nghĩa &amp; lựa chọn</th></tr>
+
+    <tr><td><code>UseSuper_Trai</code></td><td>long (enum)</td><td>6</td>
+      <td>Làn siêu cao bên Trái. <em>Trái ngoài</em>=0, <em>Trái trong</em>=1, <em>Không</em>=6 (dùng <code>i_Trai</code>).
+      Khi ≠6, độ dốc lấy từ <code>GetCrossSlopeAtStation</code> của tuyến.</td></tr>
+
+    <tr><td><code>UseSuper_Phai</code></td><td>long (enum)</td><td>6</td>
+      <td>Làn siêu cao bên Phải. <em>Phải ngoài</em>=2, <em>Phải trong</em>=3, <em>Không</em>=6 (dùng <code>i_Phai</code>).</td></tr>
+
+    <tr><td><code>Mode_Crown</code></td><td>long (enum)</td><td>0</td>
+      <td><strong>Cao độ tim đường.</strong> <em>Theo nền cũ</em>=0 (nâng tim đảm bảo chiều dày tối thiểu trên nền cũ),
+      <em>Theo profile tuyến</em>=1 (bám profile thiết kế; nền cũ nhô lên sẽ bị đào).</td></tr>
+
+    <tr><td><code>SlopeDirection</code></td><td>long (enum)</td><td>0</td>
+      <td>Hướng dốc siêu cao. <em>Ra xa tim</em>=0, <em>Hướng vào tim</em>=1.</td></tr>
+
+    <tr><td><code>SupportAOR</code></td><td>long</td><td>1</td>
+      <td>Hỗ trợ trục quay siêu cao (Axis Of Rotation). 1=bật, 0=tắt. Crown được đặt làm điểm tham chiếu AOR.</td></tr>
+
+    <tr><td><code>i_Trai</code></td><td>double (grade)</td><td>0.02</td>
+      <td>Độ dốc ngang mặt đường bên Trái khi <strong>không</strong> dùng siêu cao (2%).</td></tr>
+    <tr><td><code>b_Trai</code></td><td>double</td><td>3.0</td>
+      <td>Bề rộng nửa mặt đường bên Trái (m). Chỉ dùng khi chưa gán target <code>DG_Trai</code>.</td></tr>
+    <tr><td><code>i_Phai</code></td><td>double (grade)</td><td>0.02</td>
+      <td>Độ dốc ngang mặt đường bên Phải khi không dùng siêu cao.</td></tr>
+    <tr><td><code>b_Phai</code></td><td>double</td><td>3.0</td>
+      <td>Bề rộng nửa mặt đường bên Phải (m). Chỉ dùng khi chưa gán target <code>DG_Phai</code>.</td></tr>
+
+    <tr><td><code>MinStruct</code></td><td>double</td><td>0.12</td>
+      <td>Chiều cao kết cấu <strong>tối thiểu</strong> phải phủ trên nền cũ (m). Quyết định mức nâng tim ở chế độ "Theo nền cũ".</td></tr>
+    <tr><td><code>MinBuVenh</code></td><td>double</td><td>0.0</td>
+      <td>Chiều dày bù vênh tối thiểu cộng thêm khi tính điểm khống chế lồi của nền cũ (m).</td></tr>
+
+    <tr><td><code>t1</code></td><td>double</td><td>0.05</td><td>Chiều dày lớp 1 — <strong>Pave1</strong> (mặt trên cùng).</td></tr>
+    <tr><td><code>t2</code></td><td>double</td><td>0.07</td><td>Chiều dày lớp 2 — <strong>Pave2</strong>.</td></tr>
+    <tr><td><code>t3</code></td><td>double</td><td>0.15</td><td>Chiều dày lớp 3 — <strong>Base</strong>.</td></tr>
+    <tr><td><code>t4</code></td><td>double</td><td>0.18</td><td>Chiều dày lớp 4 — <strong>SubBase</strong>.</td></tr>
+    <tr><td><code>t5</code></td><td>double</td><td>0.18</td><td>Chiều dày lớp 5 — <strong>SubGrade</strong> (đáy).</td></tr>
+
+    <tr><td><code>mr2</code></td><td>double</td><td>0.1</td><td>Đoạn mở rộng bậc của lớp 2 so với lớp 1 (m).</td></tr>
+    <tr><td><code>mr3</code></td><td>double</td><td>0.1</td><td>Đoạn mở rộng bậc của lớp 3 so với lớp 2 (m).</td></tr>
+    <tr><td><code>mr4</code></td><td>double</td><td>0.1</td><td>Đoạn mở rộng bậc của lớp 4 so với lớp 3 (m).</td></tr>
+    <tr><td><code>mr5</code></td><td>double</td><td>0.1</td><td>Đoạn mở rộng bậc của lớp 5 so với lớp 4 (m).</td></tr>
+
+    <tr><td><code>i_mr</code></td><td>double (grade)</td><td>0.5</td>
+      <td>Độ dốc mặt bậc mở rộng (mặt nghiêng nối giữa các bậc). 0.5 = 50%.</td></tr>
+    <tr><td><code>b2</code></td><td>double</td><td>0.3</td>
+      <td>Đoạn "cạp" vào mép cũ — mép không an toàn (m). Mép nối lùi vào trong mép nền cũ một đoạn <code>b2</code>.</td></tr>
+  </table>
+
+  <div class="warn">
+    <strong>Lưu ý ATC:</strong> tham số <code>Mode_Crown</code> phải được khai báo trong file <code>.atc</code>
+    (kiểu <code>long</code> + enum 2 lựa chọn <em>Theo nền cũ=0 / Theo profile tuyến=1</em>) thì Civil 3D mới hiển thị
+    dropdown. Đặt ngay sau <code>UseSuper_Phai</code> cho khớp thứ tự bảng Properties.
+  </div>
+
+  <!-- ============ 5. SHAPE CODE ============ -->
+  <h2 id="shape">5. Bảng Shape code</h2>
+  <table>
+    <tr><th style="width:160px">Shape code</th><th>Ý nghĩa</th><th style="width:140px">Material gợi ý</th></tr>
+    <tr><td><span class="pill shape">Pave1</span></td><td>Lớp mặt 1 (overlay + mở rộng).</td><td>Bê tông nhựa lớp 1</td></tr>
+    <tr><td><span class="pill shape">Pave2</span></td><td>Lớp mặt 2.</td><td>Bê tông nhựa lớp 2</td></tr>
+    <tr><td><span class="pill shape">Base</span></td><td>Lớp móng trên.</td><td>Cấp phối đá dăm</td></tr>
+    <tr><td><span class="pill shape">SubBase</span></td><td>Lớp móng dưới.</td><td>Cấp phối tự nhiên</td></tr>
+    <tr><td><span class="pill shape">SubGrade</span></td><td>Lớp nền/đáy kết cấu.</td><td>Đất nền cải tạo</td></tr>
+    <tr><td><span class="pill shape">BuVenh_Pave1</span> … <span class="pill shape">BuVenh_SubGrade</span></td>
+        <td>Bù vênh cho từng lớp tương ứng (phần thiếu chiều dày trên nền cũ). Tên đầy đủ:
+        <code>BuVenh_Pave1, BuVenh_Pave2, BuVenh_Base, BuVenh_SubBase, BuVenh_SubGrade</code>.</td>
+        <td>Theo lớp tương ứng</td></tr>
+    <tr><td><span class="pill shape">S_Đào MR</span></td>
+        <td>Phần mặt tự nhiên (EG) nằm trên đáy kết cấu mở rộng — khối <strong>đào mở rộng</strong>.</td>
+        <td>Đào (cut)</td></tr>
+    <tr><td><span class="pill shape">S_Đào NềnCũ</span></td>
+        <td>Phần nền cũ nhô trên mặt mới (chỉ ở chế độ <em>Theo profile tuyến</em>) — khối <strong>đào nền cũ</strong>.</td>
+        <td>Đào (cut)</td></tr>
+  </table>
+
+  <!-- ============ 6. LINK CODE ============ -->
+  <h2 id="link">6. Bảng Link code</h2>
+  <table>
+    <tr><th style="width:160px">Link code</th><th>Ý nghĩa</th></tr>
+    <tr><td><span class="pill link">Top</span></td><td>Mặt trên cùng kết cấu (cả overlay lẫn mở rộng).</td></tr>
+    <tr><td><span class="pill link">L_Bù vênh</span></td><td>Mặt trên của vùng bù vênh (phủ trên nền cũ) — gắn song song với <code>Top</code> ở vùng overlay.</td></tr>
+    <tr><td><span class="pill link">Pave</span></td><td>Đồng hành với <code>Top</code> ở mặt kết cấu mở rộng (tương thích hệ code đường làm mới).</td></tr>
+    <tr><td><span class="pill link">Pave1</span></td><td>Đáy lớp Pave1 + mặt bậc mở rộng lớp 1.</td></tr>
+    <tr><td><span class="pill link">Pave2</span></td><td>Đáy lớp Pave2 + mặt bậc mở rộng lớp 2.</td></tr>
+    <tr><td><span class="pill link">Base</span></td><td>Đáy lớp Base + mặt bậc mở rộng lớp 3.</td></tr>
+    <tr><td><span class="pill link">SubBase</span></td><td>Đáy lớp SubBase + mặt bậc mở rộng lớp 4.</td></tr>
+    <tr><td><span class="pill link">SubGrade</span></td><td>Đáy lớp SubGrade (đồng hành với <code>Datum</code>).</td></tr>
+    <tr><td><span class="pill link">Datum</span></td><td>Đường đáy kết cấu (vàng): đáy SubGrade + chân ngoài + bám mặt cũ ở vùng overlay. Dùng tạo
+        <strong>surface đào/đắp</strong> của corridor.</td></tr>
+  </table>
+
+  <!-- ============ 7. POINT CODE ============ -->
+  <h2 id="point">7. Bảng Point code</h2>
+  <table>
+    <tr><th style="width:160px">Point code</th><th>Vị trí</th></tr>
+    <tr><td><span class="pill point">Crown</span></td><td>Tim đường (điểm gắn, cao độ <code>C</code>). Là điểm tham chiếu AOR.</td></tr>
+    <tr><td><span class="pill point">ETW</span></td><td>Mép mặt đường (Edge of Travel Way) — P2.</td></tr>
+    <tr><td><span class="pill point">ETW_Pave1</span></td><td>Mép ngoài lớp Pave1 sau mở rộng — P17.</td></tr>
+    <tr><td><span class="pill point">ETW_Pave2</span></td><td>Mép ngoài lớp Pave2 — P6 (đáy) / P19 (bậc).</td></tr>
+    <tr><td><span class="pill point">ETW_Base</span></td><td>Mép ngoài lớp Base — P10 / P21.</td></tr>
+    <tr><td><span class="pill point">ETW_Sub</span></td><td>Mép ngoài lớp SubBase — P13 / P22.</td></tr>
+    <tr><td><span class="pill point">ETW_SubG</span></td><td>Mép ngoài chân kết cấu (SubGrade) — P24.</td></tr>
+    <tr><td><span class="pill point">Pave2 / Base / SubBase / SubGrade</span></td>
+        <td>Các điểm mép đáy lớp tương ứng tại mép kết cấu (P6, P10, P13, P15).</td></tr>
+  </table>
+
+  <!-- ============ 8. CÁCH DÙNG ============ -->
+  <h2 id="cachdung">8. Cách sử dụng từng bước</h2>
+  <ol>
+    <li><strong>Import sub</strong> vào Civil 3D (Tool Palette → import file <code>.pkt</code>/<code>.atc</code>).</li>
+    <li><strong>Tạo Assembly</strong>, gắn sub này tại <strong>tim tuyến</strong> (marker giữa). Sub sẽ tự dựng cả 2 bên.</li>
+    <li><strong>Đặt parameters</strong> trong bảng Properties: chiều dày lớp <code>t1…t5</code>, mở rộng <code>mr2…mr5</code>,
+        bề rộng <code>b_Trai</code>/<code>b_Phai</code>, độ dốc <code>i_*</code> hoặc bật siêu cao <code>UseSuper_*</code>,
+        và chọn <code>Mode_Crown</code> (theo nền cũ / theo profile).</li>
+    <li><strong>Tạo Corridor</strong> với baseline = tuyến + profile thiết kế.</li>
+    <li><strong>Set Targets</strong> (Corridor Properties → tab <em>Surfaces</em> và <em>Width and Offset</em>):
+      <ul>
+        <li><code>OldRoad</code> → surface đường cũ.</li>
+        <li><code>EG</code> → surface mặt tự nhiên (để tính đào mở rộng).</li>
+        <li><code>DG_Trai</code>/<code>DG_Phai</code> → feature line / alignment mép mở rộng (nếu có; không thì để trống dùng <code>b_*</code>).</li>
+      </ul>
+    </li>
+    <li><strong>Rebuild Corridor.</strong> Kiểm tra mặt cắt: lớp kết cấu, bù vênh, mở rộng bậc thang, và shape đào.</li>
+    <li><strong>Trích khối lượng</strong>: dùng các Shape code (<code>Pave1…SubGrade</code>, <code>BuVenh_*</code>,
+        <code>S_Đào MR</code>, <code>S_Đào NềnCũ</code>) để gán material và bóc khối lượng.</li>
+    <li><strong>Tạo surface đào/đắp</strong>: dùng link code <code>Datum</code> làm đường đáy corridor surface.</li>
+  </ol>
+
+  <div class="warn">
+    <strong>Kiểm tra khi chạy theo profile:</strong> nếu nền cũ nhô cao hơn profile thiết kế, hãy xác nhận shape
+    <code>S_Đào NềnCũ</code> xuất hiện đúng chỗ và đã gán material đào để bóc khối lượng chính xác.
+  </div>
+
+  <p class="note" style="margin-top:40px;border-top:1px solid var(--line);padding-top:16px">
+    Tài liệu mô tả hành vi của subassembly tại thời điểm biên soạn. Sơ đồ mang tính minh hoạ, không theo tỉ lệ.
+    Tên Point/Link/Shape code khớp với mã nguồn hiện hành.
+  </p>
+
+</div>
+</body>
+</html>

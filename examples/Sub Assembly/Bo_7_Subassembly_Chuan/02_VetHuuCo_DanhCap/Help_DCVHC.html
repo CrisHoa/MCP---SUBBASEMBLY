@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hướng dẫn — Subassembly Vét hữu cơ & Đánh cấp (VHC / DCVHC)</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --ink:#e6e8ec; --muted:#9aa3b2;
+    --line:#272c36; --accent:#4ea1ff; --warn:#ffb454; --code:#1b1f27;
+    --th:#1d2230; --zebra:#13161c; --good:#5fd38d;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;}
+  .wrap{max-width:880px; margin:0 auto; padding:40px 24px 80px}
+  h1{font-size:26px; line-height:1.25; margin:0 0 6px}
+  h2{font-size:19px; margin:38px 0 12px; padding-bottom:8px; border-bottom:1px solid var(--line)}
+  h3{font-size:15px; margin:22px 0 8px}
+  p{margin:10px 0}
+  a{color:var(--accent); text-decoration:none}
+  a:hover{text-decoration:underline}
+  .sub{color:var(--muted); margin:0 0 4px}
+  .meta{background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--accent);
+    border-radius:8px; padding:12px 16px; margin:18px 0 8px; color:var(--muted); font-size:14px}
+  .meta code{color:var(--ink)}
+  code,kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em}
+  :not(pre)>code{background:var(--code); border:1px solid var(--line); border-radius:5px; padding:1px 6px; color:#cfe0ff}
+  pre{background:var(--code); border:1px solid var(--line); border-radius:10px;
+    padding:16px; overflow:auto; line-height:1.45; color:#c9d3e0; font-size:13px}
+  table{border-collapse:collapse; width:100%; margin:14px 0; font-size:14px}
+  th,td{border:1px solid var(--line); padding:8px 11px; text-align:left; vertical-align:top}
+  th{background:var(--th); font-weight:600}
+  tbody tr:nth-child(even){background:var(--zebra)}
+  td code{white-space:nowrap}
+  ol,ul{padding-left:22px} li{margin:5px 0}
+  .note{background:rgba(255,180,84,.08); border:1px solid rgba(255,180,84,.35);
+    border-left:3px solid var(--warn); border-radius:8px; padding:12px 16px; margin:14px 0}
+  .note strong{color:var(--warn)}
+  .ok{background:rgba(95,211,141,.07); border:1px solid rgba(95,211,141,.3);
+    border-left:3px solid var(--good); border-radius:8px; padding:12px 16px; margin:14px 0}
+  .ok strong{color:var(--good)}
+  .toc{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 18px; margin:22px 0}
+  .toc ol{margin:6px 0 0; padding-left:20px}
+  .toc a{color:var(--ink)}
+  .pill{display:inline-block; font-size:12px; padding:1px 8px; border-radius:20px; border:1px solid var(--line); color:var(--muted)}
+  footer{margin-top:46px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:13px; font-style:italic}
+  
+  /* SVG Styles */
+  .svg-container {width: 100%; overflow-x: auto; background-color: #0b1120; border-radius: 8px; border: 1px solid var(--line); margin: 1.5rem 0; text-align: center; padding: 1rem;}
+  svg {max-width: 100%; height: auto;}
+  text.point-code { fill: #f8fafc; font-size: 12px; font-weight: 600; }
+  text.link-code { fill: #93c5fd; font-size: 13px; font-style: italic; }
+  text.shape-code { fill: #c084fc; font-size: 14px; font-weight: bold; }
+  text.surface-label { fill: #10b981; font-size: 13px; font-weight: bold; letter-spacing: 1px; }
+
+  @media print{ body{background:#fff;color:#000} .wrap{max-width:100%} pre,code,th,.meta,.note,.ok,.toc{background:#f5f5f5;color:#000} a{color:#000} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Subassembly — VÉT HỮU CƠ &amp; ĐÁNH CẤP (VHC / DCVHC)</h1>
+  <p class="sub">Hướng dẫn sử dụng</p>
+
+  <div class="meta">
+    Class: <code>StrippingBenchingSubAssembly</code><br>
+    Port từ <code>DCVHCWpf.xaml.cs</code> sang subassembly .NET.
+  </div>
+
+  <div class="toc">
+    <strong>Mục lục</strong>
+    <ol>
+      <li><a href="#s1">Công dụng &amp; nguyên lý</a></li>
+      <li><a href="#s2">Điểm gắn &amp; Targets</a></li>
+      <li><a href="#s3">Tham số (Parameters)</a></li>
+      <li><a href="#s4">VHCMode — phạm vi vét</a></li>
+      <li><a href="#s5">Hình ảnh minh họa</a></li>
+      <li><a href="#s6">Đầu ra (Codes)</a></li>
+      <li><a href="#s7">Quy trình dùng nhanh</a></li>
+      <li><a href="#s8">Cấu hình hiển thị % &amp; giới hạn</a></li>
+      <li><a href="#s9">Xử lý sự cố</a></li>
+    </ol>
+  </div>
+
+  <h2 id="s1">1. Công dụng &amp; nguyên lý</h2>
+  <p>Tự động xử lý mặt tiếp giáp giữa nền đắp và địa hình tự nhiên: <strong>vét hữu cơ (VHC)</strong> ở vùng địa hình thoải, và <strong>đánh cấp (DCVHC)</strong> ở vùng địa hình dốc — theo TCVN. Sub xử lý <strong>tự động cả hai bên</strong> trái/phải từ điểm gắn (không có tham số Side).</p>
+  <p>Trình tự tính (mỗi bên, từ HingePoint quét ra ngoài):</p>
+  <ol>
+    <li>Quét tới khi gặp <strong>daylight</strong> (EG ≥ FG) hoặc hết bề mặt thiết kế.</li>
+    <li>Lấy mẫu thích nghi (adaptive) mặt EG trong phạm vi đó.</li>
+    <li>Phân loại từng đoạn EG theo độ dốc so với ngưỡng <code>i</code>:
+      <ul>
+        <li>|độ dốc| &lt; <code>i</code> → <strong>VHC</strong> (vùng thoải → vét hữu cơ).</li>
+        <li>|độ dốc| ≥ <code>i</code> → <strong>DCVHC</strong> (vùng dốc → đánh cấp).</li>
+      </ul>
+      Có chèn điểm cắt tại nơi đổi chiều dốc.</li>
+    <li>Dựng shape <strong>VHC</strong>: lớp dày <code>H</code> bám EG, 2 đầu thẳng đứng (hoặc vát nếu <code>VatWidth&gt;0</code>).</li>
+    <li>Dựng shape <strong>DCVHC</strong>: bậc thang rộng <code>B</code> (phần dư &lt; <code>Bmin</code> thì gộp), sàn bậc có thể nghiêng theo <code>id</code>.</li>
+  </ol>
+<pre>HingePoint ●────────── quét ra ngoài ──────────► Daylight (EG = FG)
+            \                                   ___
+   EG ‾‾‾‾‾‾‾\____ vùng thoải = VHC ____/‾‾‾\__|   |__ vùng dốc = DCVHC (bậc)
+              (lớp dày H bám EG)              ▔▔▔   (B, B, … sàn dốc id)</pre>
+
+  <h2 id="s2">2. Điểm gắn &amp; Targets</h2>
+  <p><strong>Điểm gắn (Attachment):</strong> HingePoint — mép nền đắp / subgrade edge. Khối triển khai ra ngoài từ điểm này về cả hai phía.</p>
+  <p>Gán ở tab <strong>Target Parameters</strong> của corridor:</p>
+  <table>
+    <thead><tr><th>Target</th><th>Loại</th><th>Bắt buộc</th><th>Vai trò</th></tr></thead>
+    <tbody>
+      <tr><td><code>EGSurface</code> (Bề mặt tự nhiên EG)</td><td>Surface</td><td><strong>Có</strong></td><td>Địa hình tự nhiên — mặt để vét/đánh cấp bám theo.</td></tr>
+      <tr><td><code>FGSurface</code> (Bề mặt thiết kế FG / Datum)</td><td>Surface</td><td><strong>Có</strong></td><td>Mặt thiết kế — xác định daylight và giới hạn phạm vi quét.</td></tr>
+      <tr><td><code>OldRoadSurface</code> (Bề mặt đường cũ)</td><td>Surface</td><td>Không</td><td>Tùy chọn — bề mặt đường cũ.</td></tr>
+    </tbody>
+  </table>
+  <div class="note"><strong>Bắt buộc cả EG và FG:</strong> thiếu một trong hai → sub <strong>không vẽ gì</strong>. FG hữu hạn (chỉ trong phạm vi corridor) chính là cái chặn không cho vùng vét “chạy tè le” ra ngoài.</div>
+
+  <h2 id="s3">3. Tham số (Parameters)</h2>
+  <table>
+    <thead><tr><th>Tên</th><th>Hiển thị</th><th>Mặc định</th><th>Ý nghĩa</th></tr></thead>
+    <tbody>
+      <tr><td><code>SlopeThreshold</code></td><td>Ngưỡng độ dốc đánh cấp i (%)</td><td>20</td><td>Đoạn EG dốc ≥ i% → đánh cấp; &lt; i% → vét. TCVN thường 20% (1:5).</td></tr>
+      <tr><td><code>BenchWidth</code></td><td>Bề rộng bậc cấp B (m)</td><td>1.00</td><td>Bề rộng mỗi bậc trong vùng DCVHC.</td></tr>
+      <tr><td><code>BenchWidthMin</code></td><td>Bề rộng bậc tối thiểu Bmin (m)</td><td>0.50</td><td>Phần dư &lt; Bmin sẽ gộp vào bậc kề.</td></tr>
+      <tr><td><code>StrippingDepth</code></td><td>Chiều sâu vét hữu cơ H (m)</td><td>0.30</td><td>Bề dày lớp vét hữu cơ bám EG.</td></tr>
+      <tr><td><code>DrainageSlope</code></td><td>Độ dốc thoát nước bậc cấp id (%)</td><td>2.0</td><td>Độ dốc sàn bậc (chỉ áp dụng khi bật bên dưới).</td></tr>
+      <tr><td><code>EnableDrainSlope</code></td><td>Bật độ dốc thoát nước bậc</td><td>0</td><td>1 = sàn bậc dốc id; 0 = sàn nằm ngang (id bị ép = 0).</td></tr>
+      <tr><td><code>VatWidth</code></td><td>Bề rộng vát 2 đầu mỗi đoạn (m)</td><td>0.00</td><td>0 = vách thẳng đứng; &gt;0 = vát vào trong.</td></tr>
+      <tr><td><code>EnableStripping</code></td><td>Vẽ vùng vét hữu cơ VHC</td><td>1</td><td>1 = vẽ; 0 = bỏ vùng VHC.</td></tr>
+      <tr><td><code>EnableBenching</code></td><td>Vẽ vùng đánh cấp DCVHC</td><td>1</td><td>1 = vẽ; 0 = bỏ vùng DCVHC.</td></tr>
+      <tr><td><code>BenchAfterStrip</code></td><td>Đánh cấp sau khi vét (DCsauVet)</td><td>0</td><td>1 = đỉnh bậc đặt tại EG−H (đánh cấp sau khi đã vét); 0 = đánh cấp trên EG gốc, độc lập.</td></tr>
+      <tr><td><code>VHCMode</code></td><td>Phạm vi vét hữu cơ</td><td>0</td><td>Xem mục 4.</td></tr>
+      <tr><td><code>MaxScanDistance</code></td><td>Khoảng quét tối đa (m)</td><td>50.0</td><td>Giới hạn quét từ HingePoint ra ngoài.</td></tr>
+      <tr><td><code>ExtendWidth</code></td><td>Mở rộng vét/đánh cấp ra ngoài bề mặt TK (m)</td><td>0.0</td><td>Nới phạm vi ra ngoài ranh FG.</td></tr>
+    </tbody>
+  </table>
+  <div class="note"><strong>Đơn vị độ dốc:</strong> <code>SlopeThreshold</code> và <code>DrainageSlope</code> hiện <strong>nhập theo %</strong> (nhập <code>20</code> = 20%); code tự chia 100. Về cách cho ô này hiển thị đúng “%” như sub gốc Civil 3D, xem mục 7.</div>
+
+  <h2 id="s4">4. VHCMode — phạm vi vét</h2>
+  <table>
+    <thead><tr><th>Giá trị</th><th>Tên</th><th>Vét ở đâu</th></tr></thead>
+    <tbody>
+      <tr><td><code>0</code></td><td>FillOnly</td><td>Chỉ vét vùng nền đắp (FG &gt; EG). <span class="pill">mặc định</span></td></tr>
+      <tr><td><code>1</code></td><td>FillAndShallowCut</td><td>Nền đắp + đào nông.</td></tr>
+      <tr><td><code>2</code></td><td>AllZones</td><td>Mọi vùng.</td></tr>
+      <tr><td><code>3</code></td><td>FlatBed</td><td>Vét ngang phẳng (đáy phẳng theo từng fill pocket).</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="s5">5. Hình ảnh minh họa</h2>
+  
+  <h3>5.1 Vùng địa hình thoải: Vét Hữu Cơ (VHC)</h3>
+  <div class="svg-container">
+    <svg viewBox="0 0 800 300" xmlns="http://www.w3.org/2000/svg">
+      <!-- Shape VHC -->
+      <polygon points="150,120 650,150 650,190 150,160" fill="rgba(168, 85, 247, 0.2)" stroke="none" />
+      
+      <!-- Top Link (EG-Line) -->
+      <path d="M 150 120 L 650 150" stroke="#3b82f6" stroke-width="3" fill="none" />
+      <text x="400" y="125" class="link-code" text-anchor="middle">EG-Line</text>
+      
+      <!-- Bottom & Side Links (V-VHC) -->
+      <path d="M 150 120 L 150 160 L 650 190 L 650 150" stroke="#f59e0b" stroke-width="2" fill="none" />
+      <text x="400" y="195" class="link-code" text-anchor="middle">V-VHC (Biên dưới)</text>
+      <text x="140" y="145" class="link-code" text-anchor="end">V-VHC</text>
+      <text x="660" y="175" class="link-code" text-anchor="start">V-VHC</text>
+
+      <!-- Shape Text -->
+      <text x="400" y="160" class="shape-code" text-anchor="middle">Shape: VHC</text>
+      
+      <!-- Points -->
+      <circle cx="150" cy="120" r="5" fill="#f8fafc" />
+      <text x="150" y="105" class="point-code" text-anchor="middle">P_Top_In</text>
+      
+      <circle cx="650" cy="150" r="5" fill="#f8fafc" />
+      <text x="650" y="135" class="point-code" text-anchor="middle">P_Top_Out</text>
+
+      <circle cx="150" cy="160" r="4" fill="#f8fafc" />
+      <circle cx="650" cy="190" r="4" fill="#f8fafc" />
+      
+      <!-- Indicator for EG Surface -->
+      <path d="M 50 114 L 150 120 M 650 150 L 750 156" stroke="#10b981" stroke-width="2" stroke-dasharray="6,4" fill="none" />
+      <text x="100" y="105" class="surface-label" text-anchor="middle">EG</text>
+    </svg>
+  </div>
+
+  <h3>5.2 Vùng địa hình dốc: Đánh Cấp (DCVHC)</h3>
+  <div class="svg-container">
+    <svg viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg">
+      <!-- Shape DCVHC -->
+      <polygon points="150,125 150,205 350,205 350,285 550,285 350,205" fill="rgba(168, 85, 247, 0.2)" stroke="none" />
+      
+      <!-- Top Link (EG-Line) -->
+      <path d="M 150 125 L 350 205 L 550 285" stroke="#3b82f6" stroke-width="3" fill="none" />
+      <text x="250" y="155" class="link-code" transform="rotate(21.8, 250, 155)" text-anchor="middle">EG-Line</text>
+      <text x="450" y="235" class="link-code" transform="rotate(21.8, 450, 235)" text-anchor="middle">EG-Line</text>
+
+      <!-- Bottom Benches Links (V-DCVHC) -->
+      <path d="M 150 125 L 150 205 L 350 205 L 350 285 L 550 285" stroke="#f59e0b" stroke-width="2" fill="none" />
+      <text x="250" y="220" class="link-code" text-anchor="middle">V-DCVHC (Mặt cơ)</text>
+      <text x="450" y="300" class="link-code" text-anchor="middle">V-DCVHC</text>
+      <text x="140" y="170" class="link-code" text-anchor="end">V-DCVHC (Vách)</text>
+      
+      <!-- Shape Text -->
+      <text x="280" y="195" class="shape-code" text-anchor="middle">Shape: DCVHC</text>
+
+      <!-- Points -->
+      <circle cx="150" cy="125" r="5" fill="#f8fafc" />
+      <text x="135" y="120" class="point-code" text-anchor="end">Đỉnh (Daylight)</text>
+
+      <circle cx="350" cy="205" r="5" fill="#f8fafc" />
+      
+      <circle cx="550" cy="285" r="5" fill="#f8fafc" />
+      <text x="565" y="295" class="point-code" text-anchor="start">Chân</text>
+      
+      <circle cx="150" cy="205" r="4" fill="#f8fafc" />
+      <circle cx="350" cy="285" r="4" fill="#f8fafc" />
+      
+      <!-- Indicator for EG Surface -->
+      <path d="M 50 85 L 150 125 M 550 285 L 650 325" stroke="#10b981" stroke-width="2" stroke-dasharray="6,4" fill="none" />
+      <text x="100" y="80" class="surface-label" text-anchor="middle">EG</text>
+    </svg>
+  </div>
+  <p class="sub"><i>* Lưu ý: Nếu bật <code>BenchAfterStrip = 1</code>, toàn bộ đường ziczac đánh cấp sẽ dịch xuống một khoảng bằng chiều dày lớp vét hữu cơ <code>H</code> so với mặt EG ban đầu.</i></p>
+
+  <h2 id="s6">6. Đầu ra (Codes)</h2>
+  <p>Các code dưới đây <strong>phải có trong Code Set Style</strong> để hiển thị nét/màu và gom khối lượng:</p>
+  <ul>
+    <li><strong>Shape codes:</strong> <code>VHC</code> (khối vét hữu cơ), <code>DCVHC</code> (khối đánh cấp).</li>
+    <li><strong>Link codes:</strong> <code>V-VHC</code> (biên vùng vét - đáy và cạnh), <code>V-DCVHC</code> (biên bậc thang - mặt cơ và vách), <code>EG-Line</code> (cạnh trên bám mặt EG cho cả hai).</li>
+  </ul>
+  <div class="ok"><strong>Mẹo khối lượng:</strong> gán material riêng cho shape <code>VHC</code> và <code>DCVHC</code> trong material list để bóc tách khối lượng vét và đánh cấp tách bạch. Gán render material vào Link <code>EG-Line</code> để hiện vật liệu cỏ/đất phủ trên 3D.</div>
+
+  <h2 id="s7">7. Quy trình dùng nhanh</h2>
+  <ol>
+    <li><strong>Nạp sub vào palette</strong> bằng lệnh import của add-in.</li>
+    <li><strong>Gắn sub</strong> vào marker tại mép nền đắp (HingePoint) trong Assembly.</li>
+    <li><strong>Đặt tham số:</strong> <code>i</code>, <code>B</code>, <code>Bmin</code>, <code>H</code>, và bật/tắt <code>EnableStripping</code>/<code>EnableBenching</code>. Cần sàn bậc dốc thì bật <code>EnableDrainSlope</code> + đặt <code>id</code>.</li>
+    <li><strong>Tạo Corridor</strong>, gán <code>EGSurface</code> = địa hình tự nhiên, <code>FGSurface</code> = mặt thiết kế. <em>(OldRoadSurface tùy chọn.)</em></li>
+    <li><strong>Rebuild Corridor.</strong> Vùng thoải → khối VHC; vùng dốc → bậc DCVHC, tự động hai bên.</li>
+    <li><strong>Code Set Style:</strong> đảm bảo có <code>VHC</code>, <code>DCVHC</code>, <code>V-VHC</code>, <code>V-DCVHC</code>, <code>EG-Line</code>.</li>
+  </ol>
+
+  <h2 id="s8">8. Cấu hình hiển thị % &amp; giới hạn</h2>
+  <p><strong>Cho ô độ dốc hiển thị “%”.</strong> Mặc định ô <code>SlopeThreshold</code>/<code>DrainageSlope</code> có thể hiện đơn vị “m” (do TypeInfo trong ATC). Muốn hiện “%” như sub gốc Civil 3D: đổi <code>TypeInfo="9"</code> trong ATC <strong>và</strong> chuyển sang lưu dạng phân số (default <code>0.20</code>/<code>0.02</code>, bỏ phép <code>/100</code> trong code). Phải đổi đồng bộ cả hai, không đổi lẻ.</p>
+  <p><strong>Phạm vi quét.</strong> Quét dừng tại ranh FG (hoặc <code>MaxScanDistance</code>). Nới ra ngoài bằng <code>ExtendWidth</code>. Để FG quá nhỏ → vùng vét/đánh cấp bị cắt cụt.</p>
+  <p><strong>Sàn bậc.</strong> <code>EnableDrainSlope=0</code> → sàn nằm ngang (id bị ép = 0) bất kể trị <code>id</code> nhập.</p>
+  <p><strong>Quan hệ vét &amp; đánh cấp.</strong> <code>BenchAfterStrip=1</code> đặt đỉnh bậc tại EG−H (đánh cấp phần đất dưới lớp đã vét); <code>=0</code> đánh cấp trên EG gốc, hai vùng độc lập.</p>
+  <p><strong>Layout mode.</strong> Trên Assembly (chưa có surface), sub vẽ schematic theo <code>B</code>/<code>H</code> để preview; hình thật chỉ ra khi corridor có đủ EG + FG.</p>
+
+  <h2 id="s9">9. Xử lý sự cố</h2>
+  <table>
+    <thead><tr><th>Hiện tượng</th><th>Nguyên nhân thường gặp</th><th>Cách xử lý</th></tr></thead>
+    <tbody>
+      <tr><td>Không vẽ gì sau rebuild</td><td>Thiếu <code>EGSurface</code> hoặc <code>FGSurface</code></td><td>Gán đủ cả hai surface</td></tr>
+      <tr><td>Vùng vét chạy quá xa / “tè le”</td><td><code>MaxScanDistance</code> hoặc <code>ExtendWidth</code> quá lớn, FG mỏng</td><td>Giảm 2 trị này; kiểm tra ranh FG</td></tr>
+      <tr><td>Không có bậc thang</td><td><code>EnableBenching=0</code>, hoặc địa hình không đủ dốc so với <code>i</code></td><td>Bật DCVHC; hạ <code>i</code></td></tr>
+      <tr><td>Bậc thang xuất hiện cả vùng thoải</td><td><code>i</code> đặt quá thấp</td><td>Tăng <code>i</code> (vd 20%)</td></tr>
+      <tr><td>Sàn bậc bị nghiêng ngoài ý muốn</td><td><code>EnableDrainSlope=1</code></td><td>Tắt nếu cần sàn ngang</td></tr>
+      <tr><td>Ô độ dốc hiện “m” thay vì “%”</td><td>TypeInfo ATC chưa phải 9</td><td>Theo mục 7 (đổi đồng bộ TypeInfo + phân số)</td></tr>
+      <tr><td>Có hình nhưng không màu / không khối lượng</td><td>Code <code>VHC</code>/<code>DCVHC</code>… chưa khai trong Code Set Style</td><td>Bổ sung code vào Code Set Style</td></tr>
+      <tr><td>Bậc cuối quá hẹp</td><td>Phần dư &lt; <code>Bmin</code></td><td>Đúng thiết kế (đã gộp vào bậc kề); chỉnh <code>B</code>/<code>Bmin</code> nếu cần</td></tr>
+    </tbody>
+  </table>
+
+  <footer>Tài liệu mô tả đúng hành vi class <code>StrippingBenchingSubAssembly</code> hiện tại (độ dốc nhập theo %, code chia 100). Nếu chuyển sang grade phân số theo mục 7, cập nhật lại mục 3.</footer>
+
+</div>
+</body>
+</html>

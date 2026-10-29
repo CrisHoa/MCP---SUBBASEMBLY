@@ -1,0 +1,168 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hướng Dẫn Sử Dụng - Kết Cấu Mặt Đường Mới</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1, h2, h3 { color: #569cd6; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .svg-container {
+            background-color: #20232C;
+            border: 1px solid #444;
+            border-radius: 8px;
+            overflow: auto;
+            margin: 20px 0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+            background-color: #252526;
+        }
+        th, td {
+            border: 1px solid #444;
+            padding: 10px 15px;
+            text-align: left;
+        }
+        th { background-color: #333333; color: #4ec9b0; }
+        .code { font-family: Consolas, monospace; color: #ce9178; background: #111; padding: 2px 5px; border-radius: 3px; }
+        .note { background-color: #4d4d00; padding: 15px; border-left: 5px solid #d7ba7d; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Subassembly: KẾT CẤU MẶT ĐƯỜNG MỚI (5 Lớp Mở Rộng Bậc Thang)</h1>
+    <p>Tài liệu hướng dẫn chi tiết sơ đồ cấu tạo, Point Code, Link Code, Shape Code và các tham số đầu vào.</p>
+
+    <h2>1. Sơ đồ hình học (Sơ đồ bên Phải - Right Side)</h2>
+    <div class="svg-container">
+        <svg width="1000" height="550" viewBox="0 0 1000 550" xmlns="http://www.w3.org/2000/svg">
+            <!-- Shapes -->
+            <polygon points="100,100 400,100 450,150 400,150 100,150" fill="#4ECDC4" stroke="#fff" stroke-width="1"/>
+            <polygon points="100,150 400,150 450,150 500,150 550,200 400,200 100,200" fill="#C7F464" stroke="#fff" stroke-width="1"/>
+            <polygon points="100,200 400,200 550,200 600,200 650,300 400,300 100,300" fill="#FF6B6B" stroke="#fff" stroke-width="1"/>
+            <polygon points="100,300 400,300 650,300 700,300 750,400 400,400 100,400" fill="#556270" stroke="#fff" stroke-width="1"/>
+            <polygon points="100,400 400,400 750,400 800,400 850,500 400,500 100,500" fill="#3498DB" stroke="#fff" stroke-width="1"/>
+            
+            <!-- EG & Cut Shape -->
+            <line x1="50" y1="50" x2="950" y2="230" stroke="#00ff00" stroke-width="2" stroke-dasharray="10,5"/>
+            <polygon points="400,100 450,150 500,150 550,200 600,200 650,300 700,300 750,400 800,400 850,500 850,210 400,120" fill="rgba(255, 255, 0, 0.2)" stroke="yellow" stroke-width="2" stroke-dasharray="5,5"/>
+            
+            <!-- Centerline -->
+            <line x1="100" y1="50" x2="100" y2="520" stroke="#ff0000" stroke-width="1" stroke-dasharray="10,5"/>
+            <text x="90" y="40" fill="red" font-size="14" font-weight="bold">TIM TUYẾN (Centerline)</text>
+            
+            <!-- Shape Labels -->
+            <text x="200" y="130" fill="#000" font-weight="bold">Pave1</text>
+            <text x="200" y="180" fill="#000" font-weight="bold">Pave2</text>
+            <text x="200" y="255" fill="#000" font-weight="bold">Base</text>
+            <text x="200" y="355" fill="#fff" font-weight="bold">SubBase</text>
+            <text x="200" y="455" fill="#fff" font-weight="bold">SubGrade</text>
+            <text x="650" y="150" fill="yellow" font-weight="bold">S_Đào MR (Vùng Cần Đào)</text>
+            <text x="800" y="190" fill="#00ff00" font-weight="bold">EG (Bề mặt tự nhiên)</text>
+
+            <!-- Points & Labels -->
+            <g fill="white" font-size="12" font-family="Arial">
+                <circle cx="100" cy="100" r="4" fill="red"/><text x="110" y="95">P1 (Crown)</text>
+                <circle cx="400" cy="100" r="4" fill="red"/><text x="340" y="90">P2 (ETW)</text>
+                
+                <circle cx="100" cy="150" r="3" fill="orange"/><text x="70" y="155">P3</text>
+                <circle cx="400" cy="150" r="3" fill="orange"/><text x="375" y="165">P4</text>
+                <circle cx="450" cy="150" r="3" fill="red"/><text x="455" y="145">P16</text>
+                <circle cx="500" cy="150" r="4" fill="red"/><text x="505" y="145">P17 (ETW_Pave1)</text>
+
+                <circle cx="100" cy="200" r="3" fill="orange"/><text x="70" y="205">P5</text>
+                <circle cx="400" cy="200" r="4" fill="red"/><text x="325" y="215">P6 (ETW_Pave2)</text>
+                <circle cx="550" cy="200" r="3" fill="red"/><text x="555" y="195">P18</text>
+                <circle cx="600" cy="200" r="3" fill="red"/><text x="605" y="195">P19</text>
+
+                <circle cx="100" cy="300" r="3" fill="orange"/><text x="70" y="305">P9</text>
+                <circle cx="400" cy="300" r="4" fill="red"/><text x="330" y="315">P10 (ETW_Base)</text>
+                <circle cx="650" cy="300" r="3" fill="red"/><text x="655" y="295">P20</text>
+                <circle cx="700" cy="300" r="3" fill="red"/><text x="705" y="295">P21</text>
+
+                <circle cx="100" cy="400" r="3" fill="orange"/><text x="70" y="405">P12</text>
+                <circle cx="400" cy="400" r="4" fill="red"/><text x="340" y="395">P13 (ETW_Sub)</text>
+                <circle cx="750" cy="400" r="3" fill="red"/><text x="755" y="395">P23</text>
+                <circle cx="800" cy="400" r="4" fill="red"/><text x="805" y="415">P22 (ETW_Sub)</text>
+
+                <circle cx="100" cy="500" r="3" fill="orange"/><text x="70" y="505">P14</text>
+                <circle cx="400" cy="500" r="3" fill="orange"/><text x="375" y="515">P15</text>
+                <circle cx="850" cy="500" r="4" fill="red"/><text x="855" y="505">P24 (ETW_SubG)</text>
+            </g>
+            
+            <!-- Link Labels -->
+            <text x="250" y="95" fill="white" font-size="11">Top, Pave</text>
+            <text x="250" y="515" fill="white" font-size="11">Datum, SubGrade</text>
+            <text x="560" y="515" fill="white" font-size="11">Datum, SubGrade</text>
+        </svg>
+    </div>
+
+    <h2>2. Bảng Code Phân Loại</h2>
+    <h3>Point Codes (Mã Điểm)</h3>
+    <table>
+        <tr><th>Mã Point</th><th>Mô tả</th></tr>
+        <tr><td><span class="code">Crown</span></td><td>Điểm tim đường trên cùng (P1)</td></tr>
+        <tr><td><span class="code">ETW</span></td><td>Mép phần xe chạy đường chính lớp trên cùng (P2)</td></tr>
+        <tr><td><span class="code">ETW_Pave1</span></td><td>Mép ngoài cùng của bậc mở rộng lớp Pave1 (P17)</td></tr>
+        <tr><td><span class="code">ETW_Pave2</span></td><td>Mép mặt lớp Pave2 của đường chính (P6)</td></tr>
+        <tr><td><span class="code">ETW_Base</span></td><td>Mép mặt lớp Base của đường chính (P10)</td></tr>
+        <tr><td><span class="code">ETW_Sub</span></td><td>Mép mặt lớp SubBase (P13) và mép ngoài SubBase mở rộng (P22)</td></tr>
+        <tr><td><span class="code">ETW_SubG</span></td><td>Mép ngoài cùng dưới đáy của nền đường SubGrade (P24)</td></tr>
+    </table>
+
+    <h3>Link Codes (Mã Đường Bề Mặt)</h3>
+    <table>
+        <tr><th>Mã Link</th><th>Mô tả</th></tr>
+        <tr><td><span class="code">Top</span></td><td>Bề mặt trên cùng (từ Crown đến ETW) dùng để tạo Surface đỉnh</td></tr>
+        <tr><td><span class="code">Datum</span></td><td>Bề mặt dưới cùng (từ P14 -> P15 -> P24) dùng để tạo Surface đáy (tính KL đào)</td></tr>
+        <tr><td><span class="code">Pave</span></td><td>Mặt trên cùng của lớp bê tông nhựa</td></tr>
+        <tr><td><span class="code">Pave1, Pave2, Base, SubBase, SubGrade</span></td><td>Mã bọc xung quanh chu vi từng lớp tương ứng</td></tr>
+    </table>
+
+    <h3>Shape Codes (Mã Diện Tích Mặt Cắt)</h3>
+    <table>
+        <tr><th>Mã Shape</th><th>Mô tả</th></tr>
+        <tr><td><span class="code">Pave1</span></td><td>Diện tích lớp thảm trên cùng (dày t1)</td></tr>
+        <tr><td><span class="code">Pave2</span></td><td>Diện tích lớp thảm dưới (dày t2) kèm phần mở rộng mr2</td></tr>
+        <tr><td><span class="code">Base</span></td><td>Diện tích lớp móng trên (dày t3) kèm phần mở rộng mr3</td></tr>
+        <tr><td><span class="code">SubBase</span></td><td>Diện tích lớp móng dưới (dày t4) kèm phần mở rộng mr4</td></tr>
+        <tr><td><span class="code">SubGrade</span></td><td>Diện tích lớp nền đường (dày t5) kèm phần mở rộng mr5</td></tr>
+        <tr><td><span class="code">S_Đào MR</span></td><td>Vùng Đất Cần Đào: Tính từ mặt trên của các bậc thang mở rộng lên tới bề mặt đất tự nhiên (EG)</td></tr>
+    </table>
+
+    <h2>3. Bảng Tham Số (Parameters)</h2>
+    <table>
+        <tr><th>Tham số</th><th>Ý nghĩa</th><th>Ví dụ / Mặc định</th></tr>
+        <tr><td><strong>Side</strong></td><td>Bên chèn Subassembly (Phải hoặc Trái)</td><td>Phải</td></tr>
+        <tr><td><strong>UseSuper</strong></td><td>Lựa chọn sử dụng siêu cao tuyến (tự động tính dốc)</td><td>Làn siêu cao ngoài (RightOutLane...)</td></tr>
+        <tr><td><strong>i</strong></td><td>Độ dốc mặt đường mặc định khi không có siêu cao</td><td>-2%</td></tr>
+        <tr><td><strong>b</strong></td><td>Bề rộng mặt đường chính (từ tim đến mép ETW)</td><td>3.0 m</td></tr>
+        <tr><td><strong>t1, t2, t3, t4, t5</strong></td><td>Chiều dày tương ứng của 5 lớp kết cấu</td><td>0.05, 0.07, 0.15, 0.18, 0.18 (m)</td></tr>
+        <tr><td><strong>mr2, mr3, mr4, mr5</strong></td><td>Chiều rộng phần giật cấp (bậc thang) của từng lớp</td><td>0.1 m</td></tr>
+        <tr><td><strong>i_mr</strong></td><td>Độ dốc của mặt vát các bậc thang (theo tỷ lệ 1:n)</td><td>0.5 (nghĩa là 1:2)</td></tr>
+    </table>
+
+    <h2>4. Hướng dẫn Target (Bám đối tượng)</h2>
+    <div class="note">
+        <strong>Lưu ý cực kỳ quan trọng:</strong> Để Subassembly tự động tính và vẽ vùng <code>S_Đào MR</code>, bạn BẮT BUỘC phải gán Target Surface trong Civil 3D!
+    </div>
+    <ul>
+        <li><strong>EG (Target Surface):</strong> Gán vào bề mặt đất tự nhiên. Subassembly sẽ tự động nội suy khoảng cách mỗi 5cm để bám khít biên dạng mặt đất, tính toán chính xác phần đào.</li>
+        <li><strong>LaneWidth (Target Offset):</strong> Gán vào Polyline/Alignment để vuốt mép bề rộng mặt đường chính (thay thế tham số <code>b</code>).</li>
+    </ul>
+
+</div>
+</body>
+</html>

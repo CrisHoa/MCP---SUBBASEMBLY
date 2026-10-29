@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hướng dẫn — Subassembly Taluy Đào/Đắp Đầy Đủ (TaluyFull)</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --ink:#e6e8ec; --muted:#9aa3b2;
+    --line:#272c36; --accent:#4ea1ff; --warn:#ffb454; --code:#1b1f27;
+    --th:#1d2230; --zebra:#13161c; --good:#5fd38d;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;}
+  .wrap{max-width:980px; margin:0 auto; padding:40px 24px 80px}
+  h1{font-size:26px; line-height:1.25; margin:0 0 6px}
+  h2{font-size:19px; margin:38px 0 12px; padding-bottom:8px; border-bottom:1px solid var(--line)}
+  h3{font-size:15px; margin:22px 0 8px}
+  p{margin:10px 0}
+  a{color:var(--accent); text-decoration:none}
+  a:hover{text-decoration:underline}
+  .sub{color:var(--muted); margin:0 0 4px}
+  .meta{background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--accent);
+    border-radius:8px; padding:12px 16px; margin:18px 0 8px; color:var(--muted); font-size:14px}
+  .meta code{color:var(--ink)}
+  code,kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em}
+  :not(pre)>code{background:var(--code); border:1px solid var(--line); border-radius:5px; padding:1px 6px; color:#cfe0ff}
+  pre{background:var(--code); border:1px solid var(--line); border-radius:10px;
+    padding:16px; overflow:auto; line-height:1.45; color:#c9d3e0; font-size:13px}
+  table{border-collapse:collapse; width:100%; margin:14px 0; font-size:14px}
+  th,td{border:1px solid var(--line); padding:8px 11px; text-align:left; vertical-align:top}
+  th{background:var(--th); font-weight:600}
+  tbody tr:nth-child(even){background:var(--zebra)}
+  td code{white-space:nowrap}
+  ol,ul{padding-left:22px} li{margin:5px 0}
+  .note{background:rgba(255,180,84,.08); border:1px solid rgba(255,180,84,.35);
+    border-left:3px solid var(--warn); border-radius:8px; padding:12px 16px; margin:14px 0}
+  .note strong{color:var(--warn)}
+  .ok{background:rgba(95,211,141,.07); border:1px solid rgba(95,211,141,.3);
+    border-left:3px solid var(--good); border-radius:8px; padding:12px 16px; margin:14px 0}
+  .ok strong{color:var(--good)}
+  .toc{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 18px; margin:22px 0}
+  .toc ol{margin:6px 0 0; padding-left:20px}
+  .toc a{color:var(--ink)}
+  .pill{display:inline-block; font-size:12px; padding:1px 8px; border-radius:20px; border:1px solid var(--line); color:var(--muted)}
+  footer{margin-top:46px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:13px; font-style:italic}
+  
+  /* SVG Styles */
+  .svg-container {width: 100%; overflow-x: auto; background-color: #0b1120; border-radius: 8px; border: 1px solid var(--line); margin: 1.5rem 0; text-align: center; padding: 1rem;}
+  svg {max-width: 100%; height: auto;}
+  text.point-code { fill: #f8fafc; font-size: 11px; font-weight: 600; }
+  text.link-code { fill: #93c5fd; font-size: 12px; font-style: italic; }
+  text.shape-code { fill: #c084fc; font-size: 13px; font-weight: bold; }
+  text.surface-label { fill: #10b981; font-size: 12px; font-weight: bold; letter-spacing: 1px; }
+
+  @media print{ body{background:#fff;color:#000} .wrap{max-width:100%} pre,code,th,.meta,.note,.ok,.toc{background:#f5f5f5;color:#000} a{color:#000} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Subassembly — TALUY ĐÀO/ĐẮP ĐẦY ĐỦ (TaluyFull)</h1>
+  <p class="sub">Hướng dẫn sử dụng chi tiết</p>
+
+  <div class="meta">
+    Class: <code>TaluyFullSubAssembly</code><br>
+    Port từ <code>03_TaluydaodapFull.pkt</code> tích hợp thêm các chế độ Đào theo lớp địa chất và Đào/Đắp theo lớp.
+  </div>
+
+  <div class="toc">
+    <strong>Mục lục</strong>
+    <ol>
+      <li><a href="#s1">Công dụng &amp; nguyên lý</a></li>
+      <li><a href="#s2">Điểm gắn &amp; Targets</a></li>
+      <li><a href="#s3">Tham số (Parameters)</a></li>
+      <li><a href="#s4">Các chế độ Đào / Đắp (Modes)</a></li>
+      <li><a href="#s5">Hình ảnh minh họa trực quan</a></li>
+      <li><a href="#s6">Đầu ra (Codes)</a></li>
+      <li><a href="#s7">Xử lý sự cố</a></li>
+    </ol>
+  </div>
+
+  <h2 id="s1">1. Công dụng &amp; nguyên lý</h2>
+  <p>Đây là khối subassembly tổng hợp xử lý toàn bộ sườn dốc (taluy) của nền đường, bao gồm lề đất, rãnh, và taluy đào/đắp nối lên bề mặt địa hình tự nhiên.</p>
+  <p>Trình tự tính toán tự động:</p>
+  <ol>
+    <li>Từ điểm gắn (mép mặt đường), vẽ lề đất ra ngoài.</li>
+    <li>Tại mép lề đất, kiểm tra cao độ so với mặt đất tự nhiên (EG) để xác định đây là đoạn <strong>Đào</strong> (EG cao hơn) hay <strong>Đắp</strong> (EG thấp hơn).</li>
+    <li><strong>Nếu là Đắp:</strong> Kiểm tra chênh cao. Nếu đắp rất thấp (< <code>h4</code>), sẽ tạo rãnh hở (Matranh) thay vì mái đắp. Nếu đắp cao, vẽ mái taluy đắp đi xuống. Quá trình đi xuống có thể giật cơ hoặc vẽ thành nhiều lớp đắp khác nhau (tùy <code>FillMode</code>). Tự động rải thêm một lớp <code>GiaCo</code> bám ngoài mái đắp nếu được bật.</li>
+    <li><strong>Nếu là Đào:</strong> Vẽ rãnh đỉnh trước. Sau đó từ mép rãnh ngoài, vẽ mái taluy đào đi lên. Quá trình đi lên sẽ liên tục kiểm tra <code>h1</code> và <code>h3</code> (gia cao) để quyết định giật cơ. Hoặc nếu bật chế độ địa chất, cao độ đi lên cắt qua lớp địa chất nào thì sẽ nhận độ dốc của lớp đó.</li>
+    <li>Cả đào và đắp đều dùng vòng lặp, tạo <strong>số lượng bậc cơ không giới hạn</strong> (tối đa chặn ở 20 cơ để an toàn) cho đến khi cắt bề mặt mục tiêu (Daylight).</li>
+  </ol>
+
+  <h2 id="s2">2. Điểm gắn &amp; Targets</h2>
+  <p><strong>Điểm gắn (Attachment):</strong> Mép ngoài cùng của kết cấu mặt đường (hoặc đỉnh mái taluy lề). Vẽ hướng ra ngoài theo tham số <code>Side</code>.</p>
+  <p>Gán ở tab <strong>Target Parameters</strong> của corridor:</p>
+  <table>
+    <thead><tr><th>Target</th><th>Loại</th><th>Bắt buộc</th><th>Vai trò</th></tr></thead>
+    <tbody>
+      <tr><td><code>Surface_Muc_Tieu</code> (EG)</td><td>Surface</td><td><strong>Có</strong></td><td>Bề mặt địa hình tự nhiên, dùng để phóng tia daylight.</td></tr>
+      <tr><td><code>Geo1</code>, <code>Geo2</code>, <code>Geo3</code>...</td><td>Surface</td><td>Không</td><td>Các bề mặt ranh giới lớp địa chất (chỉ dùng cho <code>CutMode=2</code>). Phải map theo thứ tự từ nông đến sâu.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="s3">3. Tham số (Parameters)</h2>
+  
+  <h3>Thông số chung</h3>
+  <table>
+    <thead><tr><th>Tên</th><th>Hiển thị</th><th>Mặc định</th><th>Ý nghĩa</th></tr></thead>
+    <tbody>
+      <tr><td><code>Side</code></td><td>Phía</td><td>Phải (0)</td><td>Phải (0) hoặc Trái (1). Xác định hướng phát triển của taluy.</td></tr>
+      <tr><td><code>B_le</code></td><td>Bề rộng lề đất (m)</td><td>0.5</td><td>Bề rộng phần lề đất bằng.</td></tr>
+      <tr><td><code>i_le</code></td><td>Độ dốc lề đất (%)</td><td>6</td><td>Dốc ngang lề đất. Nhập % (VD: 6).</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Thông số Đào/Đắp Cơ Bản (Mode = 0)</h3>
+  <table>
+    <thead><tr><th>Tên</th><th>Hiển thị</th><th>Mặc định</th><th>Ý nghĩa</th></tr></thead>
+    <tbody>
+      <tr><td><code>s1</code>, <code>s2</code></td><td>Độ dốc taluy Đào(s1)/Đắp(s2)</td><td>1:1.5</td><td>Tỷ lệ mái taluy (H:V). Nhập hệ số nằm ngang (VD: 1.5).</td></tr>
+      <tr><td><code>h1</code>, <code>h2</code></td><td>Chiều cao cơ Đào(h1)/Đắp(h2)</td><td>8m / 6m</td><td>Chiều cao tối đa để giật một bậc cơ.</td></tr>
+      <tr><td><code>i1</code>, <code>i2</code></td><td>Dốc cơ Đào(i1)/Đắp(i2) (%)</td><td>15% / 8%</td><td>Độ dốc mặt bậc cơ (dốc ngược vào trong).</td></tr>
+      <tr><td><code>bco</code></td><td>Bề rộng bậc cơ (m)</td><td>2.0</td><td>Dùng chung cho chế độ cơ bản.</td></tr>
+      <tr><td><code>h3</code></td><td>Gia cao tính giật cơ (m)</td><td>1.0</td><td>Nếu mái sắp cắt EG mà khoảng cách chiều cao còn lại &lt; h3 thì sẽ vuốt thẳng (daylight) để không tạo bậc cơ mỏng.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Thông số Rãnh & Gia Cố</h3>
+  <table>
+    <thead><tr><th>Tên</th><th>Hiển thị</th><th>Ý nghĩa</th></tr></thead>
+    <tbody>
+      <tr><td><code>h4</code></td><td>Đắp thấp làm rãnh (m)</td><td>Nếu độ sâu đắp nhỏ hơn ngưỡng này, sẽ đào rãnh thay vì đắp bờ.</td></tr>
+      <tr><td><code>br</code>, <code>hr</code></td><td>Đáy rãnh (m) / Cao rãnh (m)</td><td>Kích thước cơ bản của rãnh đào hở.</td></tr>
+      <tr><td><code>b_longranh</code>, <code>b_vairanh</code></td><td>Lòng rãnh / Vai rãnh (m)</td><td>Các bề rộng thêm ở phần đáy rãnh và lề rãnh đào.</td></tr>
+      <tr><td><code>Giaco</code>, <code>t1</code></td><td>Bật gia cố / Bề dày t1 (m)</td><td>Nếu bật (1), sẽ tạo thêm Shape <code>GiaCo</code> bám sát mặt ngoài mái đắp với bề dày t1.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Thông số Đào Theo Lớp / Đắp Theo Lớp</h3>
+  <p>Khi bật <code>CutMode = 1</code> hoặc <code>FillMode = 1</code>, hệ thống sẽ sử dụng các tham số lớp (tối đa 5 lớp cho mỗi bên):</p>
+  <ul>
+    <li><code>CNumLayers</code> / <code>FlNumLayers</code>: Số lớp thực tế muốn dùng (từ 1 tới 5).</li>
+    <li><code>CH1</code>, <code>Cs1</code>, <code>Cbco1</code>, <code>Ci1</code>: Cao độ, dốc mái, bề rộng cơ, dốc cơ của lớp Đào 1. Tương tự cho các lớp tiếp theo (H2, H3...).</li>
+    <li><code>Chp</code> / <code>Flhp</code>: Gia cao giật cơ riêng cho chế độ theo lớp (tương tự <code>h3</code>).</li>
+  </ul>
+
+  <h3>Thông số Đào Địa Chất</h3>
+  <p>Khi bật <code>CutMode = 2</code>, hệ thống bỏ qua s1, s2 và H1, H2. Nó sẽ dựa vào Target Surfaces để vẽ:</p>
+  <ul>
+    <li><code>sMat0</code>, <code>sMat1</code>, <code>sMat2</code>...: Tỷ lệ mái Đào tương ứng cho lớp địa hình 0 (trên Geo1), lớp 1 (dưới Geo1), lớp 2 (dưới Geo2)...</li>
+    <li><code>GeoBenchW</code>, <code>GeoBenchG</code>: Bề rộng và độ dốc của bậc cơ tạo ra TẠI ranh giới giữa hai lớp địa chất.</li>
+  </ul>
+
+  <div class="note"><strong>Chú ý:</strong> <code>h3</code> (gia cao) là biến cực kỳ quan trọng giúp mô hình không bị nát. Ví dụ: H=8, h3=1. Đào lên 8m, check thấy khoảng cách tới mặt đất là 0.8m (< 1m). Hệ thống sẽ không tạo bậc cơ tiếp theo mà vuốt một mạch daylight lên luôn.</div>
+
+  <h2 id="s4">4. Các chế độ Đào / Đắp (Modes)</h2>
+  <table>
+    <thead><tr><th>Mode</th><th>Trạng thái</th><th>Mô tả</th></tr></thead>
+    <tbody>
+      <tr><td><code>CutMode=0</code></td><td>Đào Cơ Bản</td><td>Chạy vòng lặp giật cơ liên tục theo <code>h1</code> và <code>h3</code>. Dùng dốc <code>s1</code>.</td></tr>
+      <tr><td><code>CutMode=1</code></td><td>Đào Theo Lớp</td><td>Vẽ từng lớp theo <code>CH1</code>, <code>CH2</code>... Hết lớp này sẽ tạo cơ và vẽ tiếp lớp sau với độ dốc riêng. Nếu EG quá cao, sau lớp 5 sẽ lặp lại tham số lớp cuối.</td></tr>
+      <tr><td><code>CutMode=2</code></td><td>Đào Địa Chất</td><td>Phóng tia kiểm tra giao cắt với <code>EG</code> và các mặt <code>Geo1</code>, <code>Geo2</code>. Cứ gặp ranh giới Geo là giật cơ và đổi độ dốc taluy dựa vào vị trí hiện tại nằm ở lớp vật liệu nào.</td></tr>
+      <tr><td><code>FillMode=0</code></td><td>Đắp Cơ Bản</td><td>Chạy vòng lặp giật cơ đi xuống theo <code>h2</code> và <code>h3</code>. Dùng dốc <code>s2</code>. Có kiểm tra Đắp thấp làm rãnh <code>h4</code>.</td></tr>
+      <tr><td><code>FillMode=1</code></td><td>Đắp Theo Lớp</td><td>Vẽ từng lớp đắp đi xuống theo <code>FlH1</code>, <code>FlH2</code>... độc lập độ dốc.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="s5">5. Hình ảnh minh họa trực quan</h2>
+  
+  <p>Dưới đây là sơ đồ chi tiết các cấu tạo Point, Link và Shape được hệ thống sinh ra ở từng Mode.</p>
+
+  <h3>5.1 Chế độ Cơ Bản (CutMode=0, FillMode=0)</h3>
+  <div class="svg-container">
+    <svg viewBox="0 0 800 450" xmlns="http://www.w3.org/2000/svg">
+      <path d="M 50 150 L 350 250 L 450 250 L 750 350" stroke="#10b981" stroke-width="2" stroke-dasharray="6,4" fill="none" />
+      <text x="60" y="140" class="surface-label">EG (Mặt đất tự nhiên)</text>
+      <path d="M 350 250 L 450 250" stroke="#cbd5e1" stroke-width="4" fill="none" />
+      <text x="360" y="270" class="point-code">P6 (Cut)</text>
+      <circle cx="350" cy="250" r="4" fill="#cbd5e1" />
+      <text x="430" y="270" class="point-code">P2 (Fill)</text>
+      <circle cx="450" cy="250" r="4" fill="#cbd5e1" />
+      
+      <!-- CUT SIDE -->
+      <path d="M 350 250 L 290 170" stroke="#ef4444" stroke-width="2" fill="none" />
+      <text x="325" y="215" class="link-code" text-anchor="end">Daylight_Cut</text>
+      <circle cx="290" cy="170" r="4" fill="#ef4444" />
+      <text x="290" y="160" class="point-code" text-anchor="middle">CB1_in</text>
+      <path d="M 290 170 L 230 170" stroke="#eab308" stroke-width="2" fill="none" />
+      <text x="260" y="185" class="link-code" text-anchor="middle">Bench</text>
+      <circle cx="230" cy="170" r="4" fill="#ef4444" />
+      <text x="230" y="160" class="point-code" text-anchor="middle">CB1_out</text>
+      <path d="M 230 170 L 185 110" stroke="#ef4444" stroke-width="2" fill="none" />
+      <text x="195" y="150" class="link-code" text-anchor="end">Daylight_Cut</text>
+      <circle cx="185" cy="110" r="4" fill="#ef4444" />
+      <text x="185" y="100" class="point-code" text-anchor="middle">CutDL</text>
+      
+      <!-- FILL SIDE -->
+      <path d="M 450 250 L 520 300" stroke="#3b82f6" stroke-width="2" fill="none" />
+      <text x="475" y="295" class="link-code">Daylight_Fill</text>
+      <circle cx="520" cy="300" r="4" fill="#3b82f6" />
+      <text x="520" y="315" class="point-code" text-anchor="middle">FB1_in</text>
+      <path d="M 520 300 L 580 300" stroke="#eab308" stroke-width="2" fill="none" />
+      <text x="550" y="295" class="link-code" text-anchor="middle">Bench</text>
+      <circle cx="580" cy="300" r="4" fill="#3b82f6" />
+      <text x="580" y="315" class="point-code" text-anchor="middle">FB1_out</text>
+      <path d="M 580 300 L 650 350" stroke="#3b82f6" stroke-width="2" fill="none" />
+      <text x="625" y="320" class="link-code">Daylight_Fill</text>
+      <circle cx="650" cy="350" r="4" fill="#3b82f6" />
+      <text x="650" y="365" class="point-code" text-anchor="middle">FillDL</text>
+
+      <!-- GIA CO SHAPE -->
+      <polygon points="450,250 520,300 580,300 650,350 660,340 585,285 520,285 455,235" fill="rgba(168, 85, 247, 0.3)" stroke="#a855f7" stroke-width="1.5" />
+      <text x="580" y="270" class="shape-code" text-anchor="middle">Shape: GiaCo</text>
+    </svg>
+  </div>
+
+  <h3>5.2 Chế độ Đào/Đắp Theo Lớp (CutMode=1, FillMode=1)</h3>
+  <div class="svg-container">
+    <svg viewBox="0 0 800 450" xmlns="http://www.w3.org/2000/svg">
+      <path d="M 50 120 L 350 250 L 450 250 L 750 380" stroke="#10b981" stroke-width="2" stroke-dasharray="6,4" fill="none" />
+      <text x="60" y="110" class="surface-label">EG</text>
+      <path d="M 350 250 L 450 250" stroke="#cbd5e1" stroke-width="4" fill="none" />
+      <circle cx="350" cy="250" r="4" fill="#cbd5e1" />
+      <circle cx="450" cy="250" r="4" fill="#cbd5e1" />
+
+      <!-- CUT SIDE -->
+      <path d="M 350 250 L 320 180" stroke="#ef4444" stroke-width="2" fill="none" />
+      <text x="345" y="215" class="link-code" text-anchor="end">Daylight_Cut (Lớp 1)</text>
+      <circle cx="320" cy="180" r="4" fill="#ef4444" />
+      <text x="320" y="170" class="point-code" text-anchor="middle">BC1_in</text>
+      <path d="M 320 180 L 280 180" stroke="#eab308" stroke-width="2" fill="none" />
+      <circle cx="280" cy="180" r="4" fill="#ef4444" />
+      <text x="280" y="170" class="point-code" text-anchor="middle">BC1_out</text>
+      <path d="M 280 180 L 220 120" stroke="#ef4444" stroke-width="2" fill="none" />
+      <text x="260" y="150" class="link-code" text-anchor="end">Daylight_Cut (Lớp 2)</text>
+      <circle cx="220" cy="120" r="4" fill="#ef4444" />
+      <text x="220" y="110" class="point-code" text-anchor="middle">BC2_in</text>
+      <path d="M 220 120 L 180 120" stroke="#eab308" stroke-width="2" fill="none" />
+      <circle cx="180" cy="120" r="4" fill="#ef4444" />
+      <text x="180" y="110" class="point-code" text-anchor="middle">BC2_out</text>
+      <path d="M 180 120 L 155 95" stroke="#ef4444" stroke-width="2" fill="none" />
+      <circle cx="155" cy="95" r="4" fill="#ef4444" />
+      <text x="155" y="85" class="point-code" text-anchor="middle">CutDL</text>
+
+      <!-- FILL SIDE -->
+      <path d="M 450 250 L 520 290" stroke="#3b82f6" stroke-width="2" fill="none" />
+      <text x="465" y="285" class="link-code">Daylight_Fill (Lớp 1)</text>
+      <circle cx="520" cy="290" r="4" fill="#3b82f6" />
+      <text x="520" y="305" class="point-code" text-anchor="middle">FC1_in</text>
+      <path d="M 520 290 L 560 290" stroke="#eab308" stroke-width="2" fill="none" />
+      <circle cx="560" cy="290" r="4" fill="#3b82f6" />
+      <text x="560" y="305" class="point-code" text-anchor="middle">FC1_out</text>
+      <path d="M 560 290 L 600 340" stroke="#3b82f6" stroke-width="2" fill="none" />
+      <text x="595" y="320" class="link-code">Daylight_Fill (Lớp 2)</text>
+      <circle cx="600" cy="340" r="4" fill="#3b82f6" />
+      <text x="600" y="355" class="point-code" text-anchor="middle">FC2_in</text>
+      <path d="M 600 340 L 640 340" stroke="#eab308" stroke-width="2" fill="none" />
+      <circle cx="640" cy="340" r="4" fill="#3b82f6" />
+      <text x="640" y="355" class="point-code" text-anchor="middle">FC2_out</text>
+      <path d="M 640 340 L 670 377" stroke="#3b82f6" stroke-width="2" fill="none" />
+      <circle cx="670" cy="377" r="4" fill="#3b82f6" />
+      <text x="670" y="392" class="point-code" text-anchor="middle">FillDL</text>
+    </svg>
+  </div>
+
+  <h3>5.3 Chế độ Đào Địa Chất (CutMode=2)</h3>
+  <div class="svg-container">
+    <svg viewBox="0 0 800 450" xmlns="http://www.w3.org/2000/svg">
+      <path d="M 50 80 L 350 150 L 750 150" stroke="#10b981" stroke-width="2" stroke-dasharray="6,4" fill="none" />
+      <text x="60" y="70" class="surface-label" fill="#10b981">EG (Mặt đất - dùng dốc sMat0)</text>
+      <path d="M 50 150 L 350 200 L 750 200" stroke="#8b5cf6" stroke-width="2" stroke-dasharray="6,4" fill="none" />
+      <text x="60" y="140" class="surface-label" fill="#8b5cf6">Geo1 (Lớp địa chất 1 - dùng sMat1)</text>
+      <path d="M 50 230 L 350 250 L 750 250" stroke="#f59e0b" stroke-width="2" stroke-dasharray="6,4" fill="none" />
+      <text x="60" y="220" class="surface-label" fill="#f59e0b">Geo2 (Lớp địa chất 2 - dùng sMat2)</text>
+      <path d="M 350 300 L 450 300" stroke="#cbd5e1" stroke-width="4" fill="none" />
+      <circle cx="350" cy="300" r="4" fill="#cbd5e1" />
+
+      <!-- CUT SIDE -->
+      <!-- In Geo2 (Material 2) -->
+      <path d="M 350 300 L 310 240" stroke="#ef4444" stroke-width="2" fill="none" />
+      <text x="340" y="275" class="link-code" text-anchor="end">Daylight_Cut (sMat2)</text>
+      <circle cx="310" cy="240" r="4" fill="#ef4444" />
+      <text x="310" y="230" class="point-code" text-anchor="middle">GB1_in</text>
+      <path d="M 310 240 L 270 240" stroke="#eab308" stroke-width="2" fill="none" />
+      <circle cx="270" cy="240" r="4" fill="#ef4444" />
+      <text x="270" y="230" class="point-code" text-anchor="middle">GB1_out</text>
+      <!-- In Geo1 (Material 1) -->
+      <path d="M 270 240 L 210 180" stroke="#ef4444" stroke-width="2" fill="none" />
+      <text x="250" y="200" class="link-code" text-anchor="end">Daylight_Cut (sMat1)</text>
+      <circle cx="210" cy="180" r="4" fill="#ef4444" />
+      <text x="210" y="170" class="point-code" text-anchor="middle">GB2_in</text>
+      <path d="M 210 180 L 170 180" stroke="#eab308" stroke-width="2" fill="none" />
+      <circle cx="170" cy="180" r="4" fill="#ef4444" />
+      <text x="170" y="170" class="point-code" text-anchor="middle">GB2_out</text>
+      <!-- In EG (Material 0) -->
+      <path d="M 170 180 L 100 110" stroke="#ef4444" stroke-width="2" fill="none" />
+      <text x="145" y="140" class="link-code" text-anchor="end">Daylight_Cut (sMat0)</text>
+      <circle cx="100" cy="110" r="4" fill="#ef4444" />
+      <text x="100" y="100" class="point-code" text-anchor="middle">CutDL</text>
+    </svg>
+  </div>
+
+  <h2 id="s6">6. Đầu ra (Codes)</h2>
+  <p>Cần đảm bảo Code Set Style của bạn chứa các code sau để Taluy hiển thị chuẩn mực và bóc tách được khối lượng:</p>
+  <ul>
+    <li><strong>Link codes:</strong> <code>Daylight_Cut</code> (mái đào), <code>Daylight_Fill</code> (mái đắp), <code>Bench</code> (mặt cơ ngang), <code>Shoulder</code> (lề đường), <code>Bottom_Ditch</code> / <code>Top_Ditch</code> (rãnh).</li>
+    <li><strong>Point codes:</strong> <code>CutDL</code> (mép đỉnh mái đào giao EG), <code>FillDL</code> (mép chân mái đắp giao EG), <code>Bench_In</code> (mép trong bậc cơ), <code>Bench_Out</code> (mép ngoài bậc cơ).</li>
+    <li><strong>Shape codes:</strong> <code>GiaCo</code> (Nếu bật tính năng gia cố mái đắp).</li>
+  </ul>
+  <div class="ok"><strong>Lưu ý về tên điểm Giật cơ:</strong> 
+    <ul>
+      <li>Chế độ Cơ bản sinh điểm: <code>CB_in/out</code> (Đào) và <code>FB_in/out</code> (Đắp)</li>
+      <li>Chế độ Theo Lớp sinh điểm: <code>BC_in/out</code> (Đào) và <code>FC_in/out</code> (Đắp)</li>
+      <li>Chế độ Địa chất sinh điểm: <code>GB_in/out</code> (Geo Bench)</li>
+      <li>Tất cả điểm trên đều mang Point Code chuẩn là <code>Bench_In</code> và <code>Bench_Out</code>. Bạn chỉ cần style cho mã chuẩn.</li>
+    </ul>
+  </div>
+
+  <h2 id="s7">7. Xử lý sự cố</h2>
+  <table>
+    <thead><tr><th>Hiện tượng</th><th>Nguyên nhân thường gặp</th><th>Cách xử lý</th></tr></thead>
+    <tbody>
+      <tr><td>Subassembly không vẽ mái taluy</td><td>Chưa add Target <code>Surface_Muc_Tieu</code></td><td>Gán Target Surface cho corridor</td></tr>
+      <tr><td>Chạy chế độ địa chất nhưng dốc không đổi</td><td>Chưa gán Target <code>Geo1</code>, <code>Geo2</code></td><td>Map đúng Surface vào các Geo target</td></tr>
+      <tr><td>Bậc cơ quá mỏng / vụn vặt sát mặt đất</td><td><code>h3</code> / <code>Chp</code> / <code>Flhp</code> đang quá nhỏ</td><td>Tăng giá trị gia cao giật cơ (khuyên dùng 0.5m - 1.5m)</td></tr>
+      <tr><td>Gia cố mái taluy không hiện</td><td>Bề dày <code>t1</code> = 0 hoặc quên khai báo Shape <code>GiaCo</code></td><td>Set <code>t1 &gt; 0</code> và bổ sung <code>GiaCo</code> vào Code Set Style</td></tr>
+    </tbody>
+  </table>
+
+  <footer>Tài liệu mô tả đầy đủ tham số và hành vi hệ thống của class <code>TaluyFullSubAssembly</code> theo cấu trúc được yêu cầu. Hỗ trợ vòng lặp lên tới 20 bậc cơ liên tục.</footer>
+
+</div>
+</body>
+</html>
