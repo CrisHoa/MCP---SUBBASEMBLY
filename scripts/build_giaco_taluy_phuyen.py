@@ -1,8 +1,9 @@
 """
 Script tự động sinh Subassembly .pkt chuẩn Civil 3D 2025-2027: Gia Cố Mái Taluy Phú Yên
 Tối ưu hóa mở trực tiếp trên Subassembly Composer GUI:
-  - Cấu trúc 3 khối Sequence trực quan, gọn gàng, click đúp mở từng khối để sửa.
-  - Khối điều kiện FlowDecision: ApDungGiaCo (Yes/No toggle) chuyển đổi giữa gia cố kiên cố và taluy đất thường.
+  - Tự động nhận diện GIẬT CƠ TALUY (Berm) khi chiều cao đắp H > H_GiatCo (H_dap > 5.0m).
+  - Cấu trúc các khối Sequence trực quan, gọn gàng, click đúp mở từng khối để xem và chỉnh sửa.
+  - Khối điều kiện FlowDecision: ApDungGiaCo (Yes/No toggle) và H_dap > H_GiatCo.
   - Bảng tham số phân nhóm rõ ràng, tên hiển thị tiếng Việt có dấu và mô tả kỹ thuật bám sát bản vẽ 02.KCAD.
 """
 
@@ -18,7 +19,7 @@ if hasattr(sys.stdout, "reconfigure"):
 ROOT_DIR = Path(r"C:\Users\Admin\Desktop\MCP - SUBBASEMBLY")
 sys.path.insert(0, str(ROOT_DIR / "src"))
 
-from sac_mcp.core.builders import GeometryBuilder, LogicBuilder, ParameterBuilder
+from sac_mcp.core.builders import GeometryBuilder, ParameterBuilder
 from sac_mcp.core.opc_package import PktPackage
 from sac_mcp.core.xaml_engine import FlowchartEngine
 from sac_mcp.models.schemas import (
@@ -36,7 +37,7 @@ def build_giaco_taluy_phuyen_pkt(output_pkt_path: str | Path) -> str:
     pkg = PktPackage.create_from_template(
         output_path=out_path,
         subassembly_name="GiaCo_MaiTaluy_PhuYen",
-        description="Gia cố mái taluy dự án Phú Yên (Tấm đan BTXM 12cm, đệm lót 2cm, chân khay 40x100cm có móng BT lót 10cm)",
+        description="Gia cố mái taluy Phú Yên (Tấm đan BTXM 12cm, đệm 2cm, chân khay 40x100cm có lót 10cm, tự động giật cơ khi H > H_GiatCo)",
         civil_version=CivilVersion.C3D_2026,
     )
     engine = FlowchartEngine(pkg.get_xaml_text())
@@ -47,7 +48,11 @@ def build_giaco_taluy_phuyen_pkt(output_pkt_path: str | Path) -> str:
     params = [
         ("ApDungGiaCo", ParameterCategory.INPUT, ParameterDataType.BOOLEAN, "True", "Áp dụng gia cố mái taluy", "True = Thi công tấm đan và chân khay kiên cố, False = Vuốt mái taluy đất thường"),
         ("EG", ParameterCategory.TARGET, ParameterDataType.SURFACE_TARGET, "-9999", "Bề mặt tự nhiên (EG)", "Bề mặt địa hình hiện trạng cần bắt chân taluy"),
-        ("Slope_Taluy", ParameterCategory.INPUT, ParameterDataType.SLOPE, "1.5", "Độ dốc mái taluy (1:m)", "Tỷ lệ mái dốc ngang/đứng (ví dụ 1.5 = 1:1.5)"),
+        ("Slope_Taluy", ParameterCategory.INPUT, ParameterDataType.SLOPE, "1.5", "Độ dốc mái taluy tầng 1 (1:m)", "Tỷ lệ mái dốc tầng trên (ví dụ 1.5 = 1:1.5)"),
+        ("Slope_Taluy2", ParameterCategory.INPUT, ParameterDataType.SLOPE, "1.5", "Độ dốc mái taluy tầng 2 (1:m)", "Tỷ lệ mái dốc tầng dưới sau khi giật cơ (1:1.5)"),
+        ("H_GiatCo", ParameterCategory.INPUT, ParameterDataType.DOUBLE, "5.00", "Chiều cao ngưỡng giật cơ (m)", "Chiều cao đắp tối đa 1 tầng trước khi giật cơ taluy"),
+        ("B_Co", ParameterCategory.INPUT, ParameterDataType.DOUBLE, "2.00", "Bề rộng bậc cơ taluy (m)", "Bề rộng mặt bậc cơ phân tầng taluy (1.5m - 2.0m)"),
+        ("Slope_Co", ParameterCategory.INPUT, ParameterDataType.GRADE, "-0.04", "Độ dốc mặt bậc cơ (%)", "Độ dốc thoát nước mặt bậc cơ (dốc vào trong)"),
         ("B_DinhKhoa", ParameterCategory.INPUT, ParameterDataType.DOUBLE, "0.50", "Bề rộng khóa đỉnh mái (m)", "Bề rộng đoạn gia cố phẳng khóa mép vỉa hè"),
         ("T_GiaCo", ParameterCategory.INPUT, ParameterDataType.DOUBLE, "0.12", "Chiều dày tấm gia cố (m)", "Chiều dày tấm đan BTXM gia cố mái (12cm)"),
         ("T_Dem", ParameterCategory.INPUT, ParameterDataType.DOUBLE, "0.02", "Chiều dày đệm lót (m)", "Chiều dày vữa xi măng / đá dăm đệm (2cm)"),
@@ -61,369 +66,397 @@ def build_giaco_taluy_phuyen_pkt(output_pkt_path: str | Path) -> str:
         pkg.sync_parameter_to_atc(pname, dt.value, def_val, disp, desc)
 
     # ========================================================================
-    # 2. Tạo 3 Khối Sequence cho Nhánh True (Áp dụng Gia Cố)
+    # 2. NHÁNH 1: CÓ GIẬT CƠ (Khi Chiều cao đắp H > H_GiatCo)
     # ========================================================================
-    # Sequence 1: Khóa đỉnh & Mái taluy
-    step1, seq1, ref1 = engine.create_sequence_step(
-        display_name="1. Khóa Đỉnh Mái & Mái Taluy Đắp",
-        x=120.0,
-        y=230.0,
+    # Sequence 1: Khóa đỉnh, Tầng 1, Bậc cơ & Tầng 2
+    step_gc1, seq_gc1, ref_gc1 = engine.create_sequence_step(
+        display_name="1. Khóa Đỉnh, Tầng 1, Bậc Cơ & Tầng 2",
+        x=80.0,
+        y=330.0,
         auto_attach=False,
     )
     # P1: Gốc xuất phát
     GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P1",
-        from_point="Origin",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y,
-        param_1_expr="0.0",
-        param_2_expr="0.0",
-        point_codes_str='"DinhTaluy", "Crown"',
-        add_link=False,
-        target_container=seq1,
+        engine=engine, point_code="P1", from_point="Origin",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="0.0",
+        point_codes_str='"DinhTaluy", "Crown"', add_link=False, target_container=seq_gc1
     )
     # P2 & L1: Khóa đỉnh
     GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P2",
-        from_point="P1",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y,
-        param_1_expr="B_DinhKhoa",
-        param_2_expr="0.0",
-        point_codes_str='"Mep_GiaCo_Dinh"',
-        add_link=True,
-        link_name="L1",
-        link_codes_str='"Top", "Pave"',
-        target_container=seq1,
+        engine=engine, point_code="P2", from_point="P1",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="B_DinhKhoa", param_2_expr="0.0",
+        point_codes_str='"Mep_GiaCo_Dinh"', add_link=True, link_name="L1", link_codes_str='"Top", "Pave"', target_container=seq_gc1
     )
-    # P3 & L2: Mái dốc bắt bề mặt EG
+    # P3 & L2: Sườn mái tầng 1 đi xuống một đoạn có chiều sâu H_GiatCo (DeltaX = H_GiatCo * Slope_Taluy)
     GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P3",
-        from_point="P2",
-        point_type=PointGeometryType.SLOPE_TO_SURFACE,
-        param_1_expr="-Slope_Taluy",
-        param_2_expr="EG",
-        point_codes_str='"ChanTaluy", "Daylight"',
-        add_link=True,
-        link_name="L2",
-        link_codes_str='"Top", "Pave", "Daylight"',
-        target_container=seq1,
+        engine=engine, point_code="P3", from_point="P2",
+        point_type=PointGeometryType.SLOPE_DELTA_X, param_1_expr="-Slope_Taluy", param_2_expr="H_GiatCo * Slope_Taluy",
+        point_codes_str='"Dau_BacCo"', add_link=True, link_name="L2", link_codes_str='"Top", "Pave", "Taluy1"', target_container=seq_gc1
+    )
+    # P4 & L3: Mặt bậc cơ taluy rộng B_Co dốc Slope_Co
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P4", from_point="P3",
+        point_type=PointGeometryType.SLOPE_DELTA_X, param_1_expr="Slope_Co", param_2_expr="B_Co",
+        point_codes_str='"Mep_BacCo"', add_link=True, link_name="L3", link_codes_str='"Top", "Pave", "BacCo"', target_container=seq_gc1
+    )
+    # P5 & L4: Sườn mái tầng 2 từ mép bậc cơ dốc -Slope_Taluy2 bắt bề mặt EG
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P5", from_point="P4",
+        point_type=PointGeometryType.SLOPE_TO_SURFACE, param_1_expr="-Slope_Taluy2", param_2_expr="EG",
+        point_codes_str='"ChanTaluy", "Daylight"', add_link=True, link_name="L4", link_codes_str='"Top", "Pave", "Daylight"', target_container=seq_gc1
     )
 
-    # Sequence 2: Chân khay bê tông & Móng BT lót
-    step2, seq2, ref2 = engine.create_sequence_step(
-        display_name="2. Chân Khay Bê Tông & Móng Lót",
-        x=120.0,
-        y=330.0,
-        auto_attach=False,
-    )
-    # P4: Gờ ngoài đỉnh chân khay
-    GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P4",
-        from_point="P3",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y,
-        param_1_expr="0.25",
-        param_2_expr="0.0",
-        point_codes_str='"ChanKhay_Ngoai"',
-        add_link=True,
-        link_name="L3",
-        link_codes_str='"ChanKhay", "Top"',
-        target_container=seq2,
-    )
-    # P5: Vách ngoài cắm sâu xuống (-H_ChanKhay)
-    GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P5",
-        from_point="P4",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y,
-        param_1_expr="0.0",
-        param_2_expr="-H_ChanKhay",
-        point_codes_str='"ChanKhay_Day_Ngoai"',
-        add_link=True,
-        link_name="L4",
-        link_codes_str='"ChanKhay", "Datum"',
-        target_container=seq2,
-    )
-    # P6: Đáy chân khay (-B_ChanKhay)
-    GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P6",
-        from_point="P5",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y,
-        param_1_expr="-B_ChanKhay",
-        param_2_expr="0.0",
-        point_codes_str='"ChanKhay_Day_Trong"',
-        add_link=True,
-        link_name="L5",
-        link_codes_str='"ChanKhay", "Datum"',
-        target_container=seq2,
-    )
-    # P7: Vách trong ngoàm lên (+H_NgoamTrong)
-    GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P7",
-        from_point="P6",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y,
-        param_1_expr="0.0",
-        param_2_expr="H_NgoamTrong",
-        point_codes_str='"ChanKhay_Ngoam"',
-        add_link=True,
-        link_name="L6",
-        link_codes_str='"ChanKhay"',
-        target_container=seq2,
-    )
-    # Link L7 nối P7 -> P3 khép kín khối chân khay
-    GeometryBuilder.add_link(
-        engine=engine,
-        link_name="L7",
-        start_point="P7",
-        end_point="P3",
-        link_codes_str='"ChanKhay"',
-        target_container=seq2,
-    )
-    # Shape Chân khay bê tông S_ChanKhay
-    GeometryBuilder.add_shape(
-        engine=engine,
-        shape_code="S_ChanKhay",
-        link_names=["L3", "L4", "L5", "L6", "L7"],
-        shape_codes_str='"S_Chân Khay", "Concrete"',
-        target_container=seq2,
-    )
-    # P8: Vách ngoài BT lót (-H_BTLot_CK từ P5)
-    GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P8",
-        from_point="P5",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y,
-        param_1_expr="0.0",
-        param_2_expr="-H_BTLot_CK",
-        point_codes_str='"BTLot_Ngoai"',
-        add_link=True,
-        link_name="L8",
-        link_codes_str='"Datum"',
-        target_container=seq2,
-    )
-    # P9: Đáy BT lót (-B_ChanKhay từ P8)
-    GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P9",
-        from_point="P8",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y,
-        param_1_expr="-B_ChanKhay",
-        param_2_expr="0.0",
-        point_codes_str='"BTLot_Day"',
-        add_link=True,
-        link_name="L9",
-        link_codes_str='"Datum"',
-        target_container=seq2,
-    )
-    # Link L10 nối P9 -> P6 khép kín móng lót
-    GeometryBuilder.add_link(
-        engine=engine,
-        link_name="L10",
-        start_point="P9",
-        end_point="P6",
-        link_codes_str='"Datum"',
-        target_container=seq2,
-    )
-    # Shape BT Lót Chân Khay S_BTLot_ChanKhay
-    GeometryBuilder.add_shape(
-        engine=engine,
-        shape_code="S_BTLot_ChanKhay",
-        link_names=["L5", "L8", "L9", "L10"],
-        shape_codes_str='"S_BTLChân Khay", "SubBase"',
-        target_container=seq2,
-    )
-
-    # Sequence 3: Tấm đan & Đệm lót gia cố mái
-    step3, seq3, ref3 = engine.create_sequence_step(
-        display_name="3. Tấm Đan & Đệm Lót Gia Cố Mái",
-        x=120.0,
+    # Sequence 2: Chân khay & Móng lót tại chân tầng 2 (P5)
+    step_gc2, seq_gc2, ref_gc2 = engine.create_sequence_step(
+        display_name="2. Chân Khay Bê Tông & Móng Lót (Chân Tầng 2)",
+        x=80.0,
         y=430.0,
         auto_attach=False,
     )
-    # P10: Mép đỉnh đáy tấm đan (-T_GiaCo từ P1)
     GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P10",
-        from_point="P1",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y,
-        param_1_expr="0.0",
-        param_2_expr="-T_GiaCo",
-        point_codes_str='"DinhTaluy_Day"',
-        add_link=True,
-        link_name="L11",
-        link_codes_str='"GiaCo"',
-        target_container=seq3,
+        engine=engine, point_code="P6", from_point="P5",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.25", param_2_expr="0.0",
+        point_codes_str='"ChanKhay_Ngoai"', add_link=True, link_name="L5", link_codes_str='"ChanKhay", "Top"', target_container=seq_gc2
     )
-    # P11: Mép khóa đỉnh đáy tấm đan (+B_DinhKhoa từ P10)
     GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P11",
-        from_point="P10",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y,
-        param_1_expr="B_DinhKhoa",
-        param_2_expr="0.0",
-        point_codes_str='"Mep_GiaCo_Dinh_Day"',
-        add_link=True,
-        link_name="L12",
-        link_codes_str='"GiaCo"',
-        target_container=seq3,
+        engine=engine, point_code="P7", from_point="P6",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-H_ChanKhay",
+        point_codes_str='"ChanKhay_Day_Ngoai"', add_link=True, link_name="L6", link_codes_str='"ChanKhay", "Datum"', target_container=seq_gc2
     )
-    # P12: Khớp nối mép dưới tấm đan ngàm vào chân khay (+0.02, +0.01 từ P7)
     GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P12",
-        from_point="P7",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y,
-        param_1_expr="0.02",
-        param_2_expr="0.01",
-        point_codes_str='"KhopNgoam_GiaCo"',
-        add_link=False,
-        target_container=seq3,
+        engine=engine, point_code="P8", from_point="P7",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="-B_ChanKhay", param_2_expr="0.0",
+        point_codes_str='"ChanKhay_Day_Trong"', add_link=True, link_name="L7", link_codes_str='"ChanKhay", "Datum"', target_container=seq_gc2
     )
-    # Link L13 nối P7 -> P12
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P9", from_point="P8",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="H_NgoamTrong",
+        point_codes_str='"ChanKhay_Ngoam"', add_link=True, link_name="L8", link_codes_str='"ChanKhay"', target_container=seq_gc2
+    )
     GeometryBuilder.add_link(
-        engine=engine,
-        link_name="L13",
-        start_point="P7",
-        end_point="P12",
-        link_codes_str='"GiaCo"',
-        target_container=seq3,
+        engine=engine, link_name="L9", start_point="P9", end_point="P5",
+        link_codes_str='"ChanKhay"', target_container=seq_gc2
     )
-    # Link L14 nối P11 -> P12
-    GeometryBuilder.add_link(
-        engine=engine,
-        link_name="L14",
-        start_point="P11",
-        end_point="P12",
-        link_codes_str='"GiaCo"',
-        target_container=seq3,
-    )
-    # Link L15 nối P12 -> P3
-    GeometryBuilder.add_link(
-        engine=engine,
-        link_name="L15",
-        start_point="P12",
-        end_point="P3",
-        link_codes_str='"GiaCo"',
-        target_container=seq3,
-    )
-    # Shape Tấm Đan Bê Tông Gia Cố Mái
     GeometryBuilder.add_shape(
-        engine=engine,
-        shape_code="S_GiaCoMai",
+        engine=engine, shape_code="S_ChanKhay", link_names=["L5", "L6", "L7", "L8", "L9"],
+        shape_codes_str='"S_Chân Khay", "Concrete"', target_container=seq_gc2
+    )
+    # BT Lót
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P10", from_point="P7",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-H_BTLot_CK",
+        point_codes_str='"BTLot_Ngoai"', add_link=True, link_name="L10", link_codes_str='"Datum"', target_container=seq_gc2
+    )
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P11", from_point="P10",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="-B_ChanKhay", param_2_expr="0.0",
+        point_codes_str='"BTLot_Day"', add_link=True, link_name="L11", link_codes_str='"Datum"', target_container=seq_gc2
+    )
+    GeometryBuilder.add_link(
+        engine=engine, link_name="L12", start_point="P11", end_point="P8",
+        link_codes_str='"Datum"', target_container=seq_gc2
+    )
+    GeometryBuilder.add_shape(
+        engine=engine, shape_code="S_BTLot_ChanKhay", link_names=["L7", "L10", "L11", "L12"],
+        shape_codes_str='"S_BTLChân Khay", "SubBase"', target_container=seq_gc2
+    )
+
+    # Sequence 3: Tấm đan & Đệm lót phủ kín toàn bộ 2 tầng và mặt cơ
+    step_gc3, seq_gc3, ref_gc3 = engine.create_sequence_step(
+        display_name="3. Tấm Đan & Đệm Lót Phủ Kín Mái Giặt Cơ",
+        x=80.0,
+        y=530.0,
+        auto_attach=False,
+    )
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P12", from_point="P1",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-T_GiaCo",
+        point_codes_str='"DinhTaluy_Day"', add_link=True, link_name="L13", link_codes_str='"GiaCo"', target_container=seq_gc3
+    )
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P13", from_point="P12",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="B_DinhKhoa", param_2_expr="0.0",
+        point_codes_str='"Mep_GiaCo_Dinh_Day"', add_link=True, link_name="L14", link_codes_str='"GiaCo"', target_container=seq_gc3
+    )
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P14", from_point="P3",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-T_GiaCo",
+        point_codes_str='"Day_Dau_BacCo"', add_link=True, link_name="L15", link_codes_str='"GiaCo"', target_container=seq_gc3
+    )
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P15", from_point="P4",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-T_GiaCo",
+        point_codes_str='"Day_Mep_BacCo"', add_link=True, link_name="L16", link_codes_str='"GiaCo"', target_container=seq_gc3
+    )
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P16", from_point="P9",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.02", param_2_expr="0.01",
+        point_codes_str='"KhopNgoam_GiaCo"', add_link=False, target_container=seq_gc3
+    )
+    GeometryBuilder.add_link(
+        engine=engine, link_name="L17", start_point="P9", end_point="P16",
+        link_codes_str='"GiaCo"', target_container=seq_gc3
+    )
+    GeometryBuilder.add_link(
+        engine=engine, link_name="L18", start_point="P15", end_point="P16",
+        link_codes_str='"GiaCo"', target_container=seq_gc3
+    )
+    GeometryBuilder.add_link(
+        engine=engine, link_name="L19", start_point="P16", end_point="P5",
+        link_codes_str='"GiaCo"', target_container=seq_gc3
+    )
+    GeometryBuilder.add_shape(
+        engine=engine, shape_code="S_GiaCoMai",
+        link_names=["L1", "L2", "L3", "L4", "L19", "L18", "L16", "L15", "L14", "L13"],
+        shape_codes_str='"S_Gia Cố Mái", "Concrete"', target_container=seq_gc3
+    )
+    # Lớp đệm lót
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P17", from_point="P12",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-T_Dem",
+        point_codes_str='"Dem_Dinh"', add_link=True, link_name="L20", link_codes_str='"Datum"', target_container=seq_gc3
+    )
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P18", from_point="P17",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="B_DinhKhoa", param_2_expr="0.0",
+        point_codes_str='"Dem_Khoa_Dinh"', add_link=True, link_name="L21", link_codes_str='"Datum"', target_container=seq_gc3
+    )
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P19", from_point="P14",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-T_Dem",
+        point_codes_str='"Dem_Dau_BacCo"', add_link=True, link_name="L22", link_codes_str='"Datum"', target_container=seq_gc3
+    )
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P20", from_point="P15",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-T_Dem",
+        point_codes_str='"Dem_Mep_BacCo"', add_link=True, link_name="L23", link_codes_str='"Datum"', target_container=seq_gc3
+    )
+    GeometryBuilder.add_link(
+        engine=engine, link_name="L24", start_point="P20", end_point="P9",
+        link_codes_str='"Datum"', target_container=seq_gc3
+    )
+    GeometryBuilder.add_shape(
+        engine=engine, shape_code="S_DemGiaCo",
+        link_names=["L14", "L15", "L16", "L17", "L24", "L23", "L22", "L21", "L20"],
+        shape_codes_str='"S_BTL GIA CỐ MÁI", "SubBase"', target_container=seq_gc3
+    )
+
+    # Nối dây tuần tự 3 Sequence nhánh Giật Cơ
+    etree.SubElement(step_gc1, engine.qn("wf", "FlowStep.Next")).append(
+        etree.Element(engine.qn("x", "Reference"))
+    )
+    step_gc1.xpath("./*[local-name()='FlowStep.Next']/*[local-name()='Reference']")[0].text = ref_gc2
+
+    etree.SubElement(step_gc2, engine.qn("wf", "FlowStep.Next")).append(
+        etree.Element(engine.qn("x", "Reference"))
+    )
+    step_gc2.xpath("./*[local-name()='FlowStep.Next']/*[local-name()='Reference']")[0].text = ref_gc3
+
+    # ========================================================================
+    # 3. NHÁNH 2: KHÔNG GIẬT CƠ (1 TẦNG - Khi H <= H_GiatCo)
+    # ========================================================================
+    step_1t, seq_1t, ref_1t = engine.create_sequence_step(
+        display_name="Gia Cố Taluy 1 Tầng (H <= H_GiatCo)",
+        x=360.0,
+        y=330.0,
+        auto_attach=False,
+    )
+    # P1_1T
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P1", from_point="Origin",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="0.0",
+        point_codes_str='"DinhTaluy", "Crown"', add_link=False, target_container=seq_1t
+    )
+    # P2_1T & L1_1T
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P2", from_point="P1",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="B_DinhKhoa", param_2_expr="0.0",
+        point_codes_str='"Mep_GiaCo_Dinh"', add_link=True, link_name="L1", link_codes_str='"Top", "Pave"', target_container=seq_1t
+    )
+    # P3_1T & L2_1T: vuốt thẳng 1 tầng đến EG
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P3", from_point="P2",
+        point_type=PointGeometryType.SLOPE_TO_SURFACE, param_1_expr="-Slope_Taluy", param_2_expr="EG",
+        point_codes_str='"ChanTaluy", "Daylight"', add_link=True, link_name="L2", link_codes_str='"Top", "Pave", "Daylight"', target_container=seq_1t
+    )
+    # Chân khay P4..P7, L3..L7, S_ChanKhay
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P4", from_point="P3",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.25", param_2_expr="0.0",
+        point_codes_str='"ChanKhay_Ngoai"', add_link=True, link_name="L3", link_codes_str='"ChanKhay", "Top"', target_container=seq_1t
+    )
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P5", from_point="P4",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-H_ChanKhay",
+        point_codes_str='"ChanKhay_Day_Ngoai"', add_link=True, link_name="L4", link_codes_str='"ChanKhay", "Datum"', target_container=seq_1t
+    )
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P6", from_point="P5",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="-B_ChanKhay", param_2_expr="0.0",
+        point_codes_str='"ChanKhay_Day_Trong"', add_link=True, link_name="L5", link_codes_str='"ChanKhay", "Datum"', target_container=seq_1t
+    )
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P7", from_point="P6",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="H_NgoamTrong",
+        point_codes_str='"ChanKhay_Ngoam"', add_link=True, link_name="L6", link_codes_str='"ChanKhay"', target_container=seq_1t
+    )
+    GeometryBuilder.add_link(
+        engine=engine, link_name="L7", start_point="P7", end_point="P3",
+        link_codes_str='"ChanKhay"', target_container=seq_1t
+    )
+    GeometryBuilder.add_shape(
+        engine=engine, shape_code="S_ChanKhay", link_names=["L3", "L4", "L5", "L6", "L7"],
+        shape_codes_str='"S_Chân Khay", "Concrete"', target_container=seq_1t
+    )
+    # BT Lót P8..P9, L8..L10, S_BTLot_ChanKhay
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P8", from_point="P5",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-H_BTLot_CK",
+        point_codes_str='"BTLot_Ngoai"', add_link=True, link_name="L8", link_codes_str='"Datum"', target_container=seq_1t
+    )
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P9", from_point="P8",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="-B_ChanKhay", param_2_expr="0.0",
+        point_codes_str='"BTLot_Day"', add_link=True, link_name="L9", link_codes_str='"Datum"', target_container=seq_1t
+    )
+    GeometryBuilder.add_link(
+        engine=engine, link_name="L10", start_point="P9", end_point="P6",
+        link_codes_str='"Datum"', target_container=seq_1t
+    )
+    GeometryBuilder.add_shape(
+        engine=engine, shape_code="S_BTLot_ChanKhay", link_names=["L5", "L8", "L9", "L10"],
+        shape_codes_str='"S_BTLChân Khay", "SubBase"', target_container=seq_1t
+    )
+    # Tấm đan 1 tầng P10..P12, L11..L15, S_GiaCoMai
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P10", from_point="P1",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-T_GiaCo",
+        point_codes_str='"DinhTaluy_Day"', add_link=True, link_name="L11", link_codes_str='"GiaCo"', target_container=seq_1t
+    )
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P11", from_point="P10",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="B_DinhKhoa", param_2_expr="0.0",
+        point_codes_str='"Mep_GiaCo_Dinh_Day"', add_link=True, link_name="L12", link_codes_str='"GiaCo"', target_container=seq_1t
+    )
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P12", from_point="P7",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.02", param_2_expr="0.01",
+        point_codes_str='"KhopNgoam_GiaCo"', add_link=False, target_container=seq_1t
+    )
+    GeometryBuilder.add_link(
+        engine=engine, link_name="L13", start_point="P7", end_point="P12",
+        link_codes_str='"GiaCo"', target_container=seq_1t
+    )
+    GeometryBuilder.add_link(
+        engine=engine, link_name="L14", start_point="P11", end_point="P12",
+        link_codes_str='"GiaCo"', target_container=seq_1t
+    )
+    GeometryBuilder.add_link(
+        engine=engine, link_name="L15", start_point="P12", end_point="P3",
+        link_codes_str='"GiaCo"', target_container=seq_1t
+    )
+    GeometryBuilder.add_shape(
+        engine=engine, shape_code="S_GiaCoMai",
         link_names=["L1", "L2", "L15", "L14", "L12", "L11"],
-        shape_codes_str='"S_Gia Cố Mái", "Concrete"',
-        target_container=seq3,
+        shape_codes_str='"S_Gia Cố Mái", "Concrete"', target_container=seq_1t
     )
-    # P13: Đáy đệm tại mép đỉnh (-T_Dem từ P10)
+    # Đệm lót 1 tầng P13..P14, L16..L18, S_DemGiaCo
     GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P13",
-        from_point="P10",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y,
-        param_1_expr="0.0",
-        param_2_expr="-T_Dem",
-        point_codes_str='"Dem_Dinh"',
-        add_link=True,
-        link_name="L16",
-        link_codes_str='"Datum"',
-        target_container=seq3,
+        engine=engine, point_code="P13", from_point="P10",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-T_Dem",
+        point_codes_str='"Dem_Dinh"', add_link=True, link_name="L16", link_codes_str='"Datum"', target_container=seq_1t
     )
-    # P14: Đáy đệm tại khóa đỉnh (+B_DinhKhoa từ P13)
     GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P14",
-        from_point="P13",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y,
-        param_1_expr="B_DinhKhoa",
-        param_2_expr="0.0",
-        point_codes_str='"Dem_Khoa_Dinh"',
-        add_link=True,
-        link_name="L17",
-        link_codes_str='"Datum"',
-        target_container=seq3,
+        engine=engine, point_code="P14", from_point="P13",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="B_DinhKhoa", param_2_expr="0.0",
+        point_codes_str='"Dem_Khoa_Dinh"', add_link=True, link_name="L17", link_codes_str='"Datum"', target_container=seq_1t
     )
-    # Link L18 nối P14 -> P7
     GeometryBuilder.add_link(
-        engine=engine,
-        link_name="L18",
-        start_point="P14",
-        end_point="P7",
-        link_codes_str='"Datum"',
-        target_container=seq3,
+        engine=engine, link_name="L18", start_point="P14", end_point="P7",
+        link_codes_str='"Datum"', target_container=seq_1t
     )
-    # Shape Lớp Đệm Lót Gia Cố Mái
     GeometryBuilder.add_shape(
-        engine=engine,
-        shape_code="S_DemGiaCo",
+        engine=engine, shape_code="S_DemGiaCo",
         link_names=["L12", "L14", "L13", "L18", "L17", "L16"],
-        shape_codes_str='"S_BTL GIA CỐ MÁI", "SubBase"',
-        target_container=seq3,
+        shape_codes_str='"S_BTL GIA CỐ MÁI", "SubBase"', target_container=seq_1t
     )
 
-    # Nối dây tuần tự 3 Sequence của nhánh True: step1 -> step2 -> step3
-    next1 = etree.SubElement(step1, engine.qn("wf", "FlowStep.Next"))
-    etree.SubElement(next1, engine.qn("x", "Reference")).text = ref2
-
-    next2 = etree.SubElement(step2, engine.qn("wf", "FlowStep.Next"))
-    etree.SubElement(next2, engine.qn("x", "Reference")).text = ref3
-
     # ========================================================================
-    # 3. Tạo Sequence cho Nhánh False (Taluy Đất Thường - Không Gia Cố)
+    # 4. NHÁNH 3: TALUY ĐẤT TỰ NHIÊN (Khi ApDungGiaCo == False)
     # ========================================================================
-    step_false, seq_false, ref_false = engine.create_sequence_step(
+    step_dat, seq_dat, ref_dat = engine.create_sequence_step(
         display_name="Mái Taluy Đất Tự Nhiên (Không Gia Cố)",
-        x=420.0,
+        x=560.0,
         y=230.0,
         auto_attach=False,
     )
-    # P1 đất
     GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P1",
-        from_point="Origin",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y,
-        param_1_expr="0.0",
-        param_2_expr="0.0",
-        point_codes_str='"DinhTaluy", "Crown"',
-        add_link=False,
-        target_container=seq_false,
+        engine=engine, point_code="P1", from_point="Origin",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="0.0",
+        point_codes_str='"DinhTaluy", "Crown"', add_link=False, target_container=seq_dat
     )
-    # P2 đất vuốt thẳng ra mặt đất tự nhiên EG
     GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P2",
-        from_point="P1",
-        point_type=PointGeometryType.SLOPE_TO_SURFACE,
-        param_1_expr="-Slope_Taluy",
-        param_2_expr="EG",
-        point_codes_str='"ChanTaluy", "Daylight"',
-        add_link=True,
-        link_name="L1",
-        link_codes_str='"Top", "Daylight"',
-        target_container=seq_false,
+        engine=engine, point_code="P2", from_point="P1",
+        point_type=PointGeometryType.SLOPE_TO_SURFACE, param_1_expr="-Slope_Taluy", param_2_expr="EG",
+        point_codes_str='"ChanTaluy", "Daylight"', add_link=True, link_name="L1", link_codes_str='"Top", "Daylight"', target_container=seq_dat
     )
 
     # ========================================================================
-    # 4. Gắn FlowDecision làm StartNode của Flowchart
+    # 5. ĐIỀU KIỆN 2: FlowDecision kiểm tra chiều cao đắp H > H_GiatCo?
     # ========================================================================
-    dec_el, dec_ref = engine.create_flow_decision(
+    step_test, seq_test, ref_test = engine.create_sequence_step(
+        display_name="Kiểm Tra Chiều Cao Đắp (AP1 -> EG)",
+        x=220.0,
+        y=180.0,
+        auto_attach=False,
+    )
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P1", from_point="Origin",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="0.0",
+        point_codes_str='"DinhTaluy"', add_link=False, target_container=seq_test
+    )
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="P2", from_point="P1",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="B_DinhKhoa", param_2_expr="0.0",
+        point_codes_str='"MepDinh"', add_link=False, target_container=seq_test
+    )
+    GeometryBuilder.add_point_and_link(
+        engine=engine, point_code="AP1", from_point="P2",
+        point_type=PointGeometryType.SLOPE_TO_SURFACE, param_1_expr="-Slope_Taluy", param_2_expr="EG",
+        is_auxiliary=True, target_container=seq_test
+    )
+
+    # FlowDecision 2: Chiều cao đắp > H_GiatCo?
+    dec_giatco, ref_dec_giatco = engine.create_flow_decision(
+        condition_expr="(P2.Y - AP1.Y) > H_GiatCo",
+        display_name="H_dap > H_GiatCo?",
+        true_ref_id=ref_gc1,
+        false_ref_id=ref_1t,
+        x=220.0,
+        y=250.0,
+        auto_attach=False,
+    )
+    etree.SubElement(step_test, engine.qn("wf", "FlowStep.Next")).append(
+        etree.Element(engine.qn("x", "Reference"))
+    )
+    step_test.xpath("./*[local-name()='FlowStep.Next']/*[local-name()='Reference']")[0].text = ref_dec_giatco
+
+    # ========================================================================
+    # 6. ĐIỀU KIỆN 1: FlowDecision StartNode: Áp dụng gia cố?
+    # ========================================================================
+    dec_start, ref_dec_start = engine.create_flow_decision(
         condition_expr="ApDungGiaCo",
         display_name="Áp dụng gia cố mái?",
-        true_ref_id=ref1,
-        false_ref_id=ref_false,
-        x=260.0,
-        y=100.0,
+        true_ref_id=ref_test,
+        false_ref_id=ref_dat,
+        x=360.0,
+        y=90.0,
         auto_attach=True,
     )
 
     pkg.set_xaml_text(engine.to_xaml_string())
     pkg.save()
-    print(f"Đã tạo thành công file PKT tối ưu SAC GUI: {out_path} ({out_path.stat().st_size} bytes)")
+    print(f"Đã tạo thành công file PKT có GIẬT CƠ TỰ ĐỘNG: {out_path} ({out_path.stat().st_size} bytes)")
     return str(out_path)
 
 

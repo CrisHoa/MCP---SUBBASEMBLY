@@ -14,7 +14,7 @@ def test_giaco_taluy_phuyen_structure():
     assert res["subassembly_name"] == "GiaCo_MaiTaluy_PhuYen"
     assert len(res["parameters"]) >= 10
     assert len(res["points"]) >= 14
-    assert len(res["shapes"]) == 4
+    assert len(res["shapes"]) >= 4
 
     shape_names = [sh["shape_number"] for sh in res["shapes"]]
     for es in ["S_ChanKhay", "S_BTLot_ChanKhay", "S_GiaCoMai", "S_DemGiaCo"]:
@@ -46,16 +46,16 @@ def test_giaco_taluy_flowchart_sequences_and_decisions():
 
     # Kiểm tra FlowDecision
     decisions = engine.root.xpath("//*[local-name()='FlowDecision']")
-    assert len(decisions) >= 1, "Phải có ít nhất 1 khối FlowDecision"
-    assert "ApDungGiaCo" in decisions[0].get("Condition", "")
+    assert len(decisions) >= 2, "Phải có ít nhất 2 khối FlowDecision (ApDungGiaCo và H_GiatCo)"
+    assert any("ApDungGiaCo" in d.get("Condition", "") for d in decisions)
+    assert any("H_GiatCo" in d.get("Condition", "") for d in decisions)
 
     # Kiểm tra Sequence containers
     sequences = engine.root.xpath("//*[local-name()='Sequence']")
-    assert len(sequences) >= 4, "Phải có đủ 4 khối Sequence (3 khối gia cố + 1 khối taluy đất)"
+    assert len(sequences) >= 5, "Phải có đủ 5 khối Sequence"
 
     seq_names = [s.get("DisplayName", "") for s in sequences]
-    assert any("Khóa Đỉnh" in name for name in seq_names)
+    assert any("Bậc Cơ" in name for name in seq_names)
     assert any("Chân Khay" in name for name in seq_names)
-    assert any("Tấm Đan" in name for name in seq_names)
-    assert any("Đất Tự Nhiên" in name for name in seq_names)
+    assert any("Giặt Cơ" in name or "Gia Cố" in name for name in seq_names)
 
