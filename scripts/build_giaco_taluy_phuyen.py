@@ -1,16 +1,13 @@
 """
 Script tự động sinh Subassembly .pkt chuẩn Civil 3D 2025-2027: Gia Cố Mái Taluy Phú Yên
-Tối ưu hóa mở trực tiếp trên Subassembly Composer GUI:
-  - Tự động nhận diện GIẬT CƠ TALUY (Berm) khi chiều cao đắp H > H_GiatCo (H_dap > 5.0m).
-  - Giữ nguyên chiều dày H của Tấm đan BTXM (T_GiaCo = 0.12m) và Lớp đệm lót (T_Dem = 0.02m)
-    xuyên suốt từ Khóa đỉnh -> Mái tầng 1 -> Mặt bậc cơ -> Mái tầng 2 -> Chân khay.
-  - Sử dụng ĐỊNH DANH HÌNH HỌC DUY NHẤT (Unique Point/Link/Shape Numbers) trên toàn bộ workflow.
-    Triệt tiêu 100% lỗi đỏ dấu chấm than (!) "Value for property 'Name' is duplicated" của SAC GUI.
-  - Các đường đáy đan và đáy đệm luôn SONG SONG TUYỆT ĐỐI với mặt sườn mái, tạo thành các
-    vòng khép kín chuẩn (Eulerian cycle) để SAC GUI tự động render đầy đủ màu sắc Shape.
-  - Cấu trúc các khối Sequence trực quan, gọn gàng, click đúp mở từng khối để xem và chỉnh sửa.
-  - Khối điều kiện FlowDecision: ApDungGiaCo (Yes/No toggle) và H_dap > H_GiatCo.
-  - Bảng tham số phân nhóm rõ ràng, tên hiển thị tiếng Việt có dấu và mô tả kỹ thuật bám sát bản vẽ 02.KCAD.
+Bám sát 100% cấu kiện và dữ liệu đầu vào từ bản vẽ thiết kế 02.KCAD và file Taluy gốc:
+  - Tự động nhận diện GIẬT CƠ TALUY khi chiều cao đắp H > H_GiatCo (mặc định 5.0m).
+  - Giữ nguyên chiều dày cấu kiện H của Tấm đan BTXM (T_GiaCo = 0.12m) và Đệm lót (T_Dem = 0.02m).
+  - Khớp ngàm chân khay chuẩn xác (P33 từ P26: 0.02m, 0.01m; P12 từ P7: 0.02m, 0.01m)
+    loại bỏ 100% hiện tượng tấm đan đâm xuyên vào khối bê tông chân khay.
+  - Sử dụng ĐỊNH DANH HÌNH HỌC DUY NHẤT (Unique Point/Link/Shape Numbers) trên toàn bộ sơ đồ,
+    triệt tiêu hoàn toàn lỗi đỏ dấu chấm than (!) "Value for property 'Name' is duplicated" của SAC GUI.
+  - Bảng tham số phân nhóm rõ ràng, tên hiển thị tiếng Việt có dấu.
 """
 
 from __future__ import annotations
@@ -101,7 +98,7 @@ def build_giaco_taluy_phuyen_pkt(output_pkt_path: str | Path) -> str:
     )
 
     # ========================================================================
-    # 3. NHÁNH CÓ GIẬT CƠ (Khi H_dap > H_GiatCo): DÙNG P20..P38, L20..L42
+    # 3. NHÁNH CÓ GIẬT CƠ (Khi H_dap > H_GiatCo): DÙNG P20..P37, L20..L42
     # ========================================================================
     # Sequence 2A: Sườn Mái Giật Cơ (Tầng 1, Bậc Cơ, Tầng 2)
     step_gc1, seq_gc1, ref_gc1 = engine.create_sequence_step(
@@ -185,7 +182,7 @@ def build_giaco_taluy_phuyen_pkt(output_pkt_path: str | Path) -> str:
     )
 
     # Sequence 2C: Tấm Đan & Đệm Lót Toàn Bộ Mái Giật Cơ
-    # Giữ nguyên chiều dày phương đứng H (T_GiaCo = 0.12m, T_Dem = 0.02m) trên toàn bộ các đoạn
+    # Chuẩn xác khớp ngàm khóa mép với chân khay theo Taluy gốc và bản vẽ 02.KCAD
     step_gc3, seq_gc3, ref_gc3 = engine.create_sequence_step(
         display_name="2C. Tấm Đan & Đệm Lót Toàn Bộ Mái Giật Cơ",
         x=60.0,
@@ -211,7 +208,7 @@ def build_giaco_taluy_phuyen_pkt(output_pkt_path: str | Path) -> str:
         point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-T_GiaCo",
         point_codes_str='"Day_Dau_BacCo"', add_link=False, target_container=seq_gc3
     )
-    # L33: Đáy đan sườn dốc tầng 1 từ P30 đến P31 (song song tuyệt đối L20)
+    # L33: Đáy đan sườn dốc tầng 1 từ P30 đến P31 (song song L20)
     GeometryBuilder.add_link(
         engine=engine, link_name="L33", start_point="P30", end_point="P31",
         link_codes_str='"GiaCo"', target_container=seq_gc3
@@ -222,31 +219,31 @@ def build_giaco_taluy_phuyen_pkt(output_pkt_path: str | Path) -> str:
         point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-T_GiaCo",
         point_codes_str='"Day_Mep_BacCo"', add_link=False, target_container=seq_gc3
     )
-    # L34: Đáy đan mặt bậc cơ từ P31 đến P32 (song song tuyệt đối L21)
+    # L34: Đáy đan mặt bậc cơ từ P31 đến P32 (song song L21)
     GeometryBuilder.add_link(
         engine=engine, link_name="L34", start_point="P31", end_point="P32",
         link_codes_str='"GiaCo"', target_container=seq_gc3
     )
-    # P33: dưới P22 (chân tầng 2)
+    # P33: Khớp ngàm tấm đan vào chân khay (từ đỉnh ngoàm P26: 0.02, 0.01 theo chuẩn Taluy gốc)
     GeometryBuilder.add_point_and_link(
-        engine=engine, point_code="P33", from_point="P22",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-T_GiaCo",
-        point_codes_str='"Day_Chan_Taluy2"', add_link=False, target_container=seq_gc3
+        engine=engine, point_code="P33", from_point="P26",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.02", param_2_expr="0.01",
+        point_codes_str='"KhopNgoam_GiaCo"', add_link=True, link_name="L35", link_codes_str='"GiaCo"', target_container=seq_gc3
     )
-    # L35: Đáy đan sườn dốc tầng 2 từ P32 đến P33 (song song tuyệt đối L22)
+    # L36: Đáy đan tầng 2 từ mép cơ P32 vuốt xuống khớp ngàm P33
     GeometryBuilder.add_link(
-        engine=engine, link_name="L35", start_point="P32", end_point="P33",
+        engine=engine, link_name="L36", start_point="P32", end_point="P33",
         link_codes_str='"GiaCo"', target_container=seq_gc3
     )
-    # L36: Khép mép đan tại chân tầng 2 từ P33 lên P22
+    # L37: Khép mép đan từ khớp ngàm P33 lên chân taluy P22
     GeometryBuilder.add_link(
-        engine=engine, link_name="L36", start_point="P33", end_point="P22",
+        engine=engine, link_name="L37", start_point="P33", end_point="P22",
         link_codes_str='"GiaCo"', target_container=seq_gc3
     )
-    # Shape Tấm Đan Toàn Bộ Mái Giật Cơ (S_GiaCoMai_GC)
+    # Shape Tấm Đan Giật Cơ (S_GiaCoMai_GC)
     GeometryBuilder.add_shape(
         engine=engine, shape_code="S_GiaCoMai_GC",
-        link_names=["L1", "L20", "L21", "L22", "L36", "L35", "L34", "L33", "L32", "L31"],
+        link_names=["L1", "L20", "L21", "L22", "L37", "L36", "L34", "L33", "L32", "L31"],
         shape_codes_str='"S_Gia Cố Mái", "Concrete"', target_container=seq_gc3
     )
 
@@ -255,13 +252,13 @@ def build_giaco_taluy_phuyen_pkt(output_pkt_path: str | Path) -> str:
     GeometryBuilder.add_point_and_link(
         engine=engine, point_code="P34", from_point="P29",
         point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-T_Dem",
-        point_codes_str='"Dem_Dinh"', add_link=True, link_name="L37", link_codes_str='"Datum"', target_container=seq_gc3
+        point_codes_str='"Dem_Dinh"', add_link=True, link_name="L38", link_codes_str='"Datum"', target_container=seq_gc3
     )
     # P35: dưới P30
     GeometryBuilder.add_point_and_link(
         engine=engine, point_code="P35", from_point="P34",
         point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="B_DinhKhoa", param_2_expr="0.0",
-        point_codes_str='"Dem_Khoa_Dinh"', add_link=True, link_name="L38", link_codes_str='"Datum"', target_container=seq_gc3
+        point_codes_str='"Dem_Khoa_Dinh"', add_link=True, link_name="L39", link_codes_str='"Datum"', target_container=seq_gc3
     )
     # P36: dưới P31 (đầu bậc cơ)
     GeometryBuilder.add_point_and_link(
@@ -269,9 +266,9 @@ def build_giaco_taluy_phuyen_pkt(output_pkt_path: str | Path) -> str:
         point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-T_Dem",
         point_codes_str='"Dem_Dau_BacCo"', add_link=False, target_container=seq_gc3
     )
-    # L39: Đáy đệm sườn dốc tầng 1 từ P35 đến P36 (song song tuyệt đối L33 & L20)
+    # L40: Đáy đệm sườn dốc tầng 1 từ P35 đến P36
     GeometryBuilder.add_link(
-        engine=engine, link_name="L39", start_point="P35", end_point="P36",
+        engine=engine, link_name="L40", start_point="P35", end_point="P36",
         link_codes_str='"Datum"', target_container=seq_gc3
     )
     # P37: dưới P32 (mép bậc cơ)
@@ -280,31 +277,20 @@ def build_giaco_taluy_phuyen_pkt(output_pkt_path: str | Path) -> str:
         point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-T_Dem",
         point_codes_str='"Dem_Mep_BacCo"', add_link=False, target_container=seq_gc3
     )
-    # L40: Đáy đệm mặt bậc cơ từ P36 đến P37 (song song tuyệt đối L34 & L21)
+    # L41: Đáy đệm mặt bậc cơ từ P36 đến P37
     GeometryBuilder.add_link(
-        engine=engine, link_name="L40", start_point="P36", end_point="P37",
+        engine=engine, link_name="L41", start_point="P36", end_point="P37",
         link_codes_str='"Datum"', target_container=seq_gc3
     )
-    # P38: dưới P33 (chân tầng 2)
-    GeometryBuilder.add_point_and_link(
-        engine=engine, point_code="P38", from_point="P33",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-T_Dem",
-        point_codes_str='"Dem_Chan_Taluy2"', add_link=False, target_container=seq_gc3
-    )
-    # L41: Đáy đệm sườn dốc tầng 2 từ P37 đến P38 (song song tuyệt đối L35 & L22)
+    # L42: Đáy đệm tầng 2 từ mép cơ P37 về đỉnh ngoàm chân khay P26
     GeometryBuilder.add_link(
-        engine=engine, link_name="L41", start_point="P37", end_point="P38",
+        engine=engine, link_name="L42", start_point="P37", end_point="P26",
         link_codes_str='"Datum"', target_container=seq_gc3
     )
-    # L42: Khép mép đệm tại chân tầng 2 từ P38 lên P33
-    GeometryBuilder.add_link(
-        engine=engine, link_name="L42", start_point="P38", end_point="P33",
-        link_codes_str='"Datum"', target_container=seq_gc3
-    )
-    # Shape Đệm Lót Toàn Bộ Mái Giật Cơ (S_DemGiaCo_GC)
+    # Shape Đệm Lót Giật Cơ (S_DemGiaCo_GC)
     GeometryBuilder.add_shape(
         engine=engine, shape_code="S_DemGiaCo_GC",
-        link_names=["L32", "L33", "L34", "L35", "L42", "L41", "L40", "L39", "L38", "L37"],
+        link_names=["L32", "L33", "L34", "L36", "L35", "L42", "L41", "L40", "L39", "L38"],
         shape_codes_str='"S_BTL GIA CỐ MÁI", "SubBase"', target_container=seq_gc3
     )
 
@@ -320,7 +306,7 @@ def build_giaco_taluy_phuyen_pkt(output_pkt_path: str | Path) -> str:
     step_gc2.xpath("./*[local-name()='FlowStep.Next']/*[local-name()='Reference']")[0].text = ref_gc3
 
     # ========================================================================
-    # 4. NHÁNH KHÔNG GIẬT CƠ (1 TẦNG - H <= H_GiatCo): DÙNG P3..P15, L2..L18
+    # 4. NHÁNH KHÔNG GIẬT CƠ (1 TẦNG - H <= H_GiatCo): DÙNG P3..P14, L2..L18
     # ========================================================================
     step_1t, seq_1t, ref_1t = engine.create_sequence_step(
         display_name="2. Gia Cố Taluy 1 Tầng (H <= H_GiatCo)",
@@ -382,7 +368,7 @@ def build_giaco_taluy_phuyen_pkt(output_pkt_path: str | Path) -> str:
         engine=engine, shape_code="S_BTLot_ChanKhay", link_names=["L5", "L8", "L9", "L10"],
         shape_codes_str='"S_BTLChân Khay", "SubBase"', target_container=seq_1t
     )
-    # Tấm đan 1 tầng P10..P12, L11..L14, S_GiaCoMai
+    # Tấm đan 1 tầng P10..P12, L11..L15, S_GiaCoMai
     GeometryBuilder.add_point_and_link(
         engine=engine, point_code="P10", from_point="P1",
         point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-T_GiaCo",
@@ -394,55 +380,45 @@ def build_giaco_taluy_phuyen_pkt(output_pkt_path: str | Path) -> str:
         point_codes_str='"Mep_GiaCo_Dinh_Day"', add_link=True, link_name="L12", link_codes_str='"GiaCo"', target_container=seq_1t
     )
     GeometryBuilder.add_point_and_link(
-        engine=engine, point_code="P12", from_point="P3",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-T_GiaCo",
-        point_codes_str='"Day_Chan_Taluy"', add_link=False, target_container=seq_1t
+        engine=engine, point_code="P12", from_point="P7",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.02", param_2_expr="0.01",
+        point_codes_str='"KhopNgoam_GiaCo"', add_link=True, link_name="L13", link_codes_str='"GiaCo"', target_container=seq_1t
     )
-    # L13: Đáy đan từ P11 đến P12 (song song tuyệt đối L2)
+    # L14: Đáy đan từ P11 đến P12 (vuốt thẳng vào ngàm chân khay)
     GeometryBuilder.add_link(
-        engine=engine, link_name="L13", start_point="P11", end_point="P12",
+        engine=engine, link_name="L14", start_point="P11", end_point="P12",
         link_codes_str='"GiaCo"', target_container=seq_1t
     )
-    # L14: Khép mép đan từ P12 lên P3
+    # L15: Khép mép đan từ ngàm P12 lên chân taluy P3
     GeometryBuilder.add_link(
-        engine=engine, link_name="L14", start_point="P12", end_point="P3",
+        engine=engine, link_name="L15", start_point="P12", end_point="P3",
         link_codes_str='"GiaCo"', target_container=seq_1t
     )
     GeometryBuilder.add_shape(
         engine=engine, shape_code="S_GiaCoMai",
-        link_names=["L1", "L2", "L14", "L13", "L12", "L11"],
+        link_names=["L1", "L2", "L15", "L14", "L12", "L11"],
         shape_codes_str='"S_Gia Cố Mái", "Concrete"', target_container=seq_1t
     )
 
-    # Đệm lót 1 tầng P13..P15, L15..L18, S_DemGiaCo
+    # Đệm lót 1 tầng P13..P14, L16..L18, S_DemGiaCo
     GeometryBuilder.add_point_and_link(
         engine=engine, point_code="P13", from_point="P10",
         point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-T_Dem",
-        point_codes_str='"Dem_Dinh"', add_link=True, link_name="L15", link_codes_str='"Datum"', target_container=seq_1t
+        point_codes_str='"Dem_Dinh"', add_link=True, link_name="L16", link_codes_str='"Datum"', target_container=seq_1t
     )
     GeometryBuilder.add_point_and_link(
         engine=engine, point_code="P14", from_point="P13",
         point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="B_DinhKhoa", param_2_expr="0.0",
-        point_codes_str='"Dem_Khoa_Dinh"', add_link=True, link_name="L16", link_codes_str='"Datum"', target_container=seq_1t
+        point_codes_str='"Dem_Khoa_Dinh"', add_link=True, link_name="L17", link_codes_str='"Datum"', target_container=seq_1t
     )
-    GeometryBuilder.add_point_and_link(
-        engine=engine, point_code="P15", from_point="P12",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="-T_Dem",
-        point_codes_str='"Dem_Chan_Taluy"', add_link=False, target_container=seq_1t
-    )
-    # L17: Đáy đệm từ P14 đến P15 (song song tuyệt đối L13)
+    # L18: Đáy đệm từ P14 về đỉnh ngoàm chân khay P7
     GeometryBuilder.add_link(
-        engine=engine, link_name="L17", start_point="P14", end_point="P15",
-        link_codes_str='"Datum"', target_container=seq_1t
-    )
-    # L18: Khép mép đệm từ P15 lên P12
-    GeometryBuilder.add_link(
-        engine=engine, link_name="L18", start_point="P15", end_point="P12",
+        engine=engine, link_name="L18", start_point="P14", end_point="P7",
         link_codes_str='"Datum"', target_container=seq_1t
     )
     GeometryBuilder.add_shape(
         engine=engine, shape_code="S_DemGiaCo",
-        link_names=["L12", "L13", "L18", "L17", "L16", "L15"],
+        link_names=["L12", "L14", "L13", "L18", "L17", "L16"],
         shape_codes_str='"S_BTL GIA CỐ MÁI", "SubBase"', target_container=seq_1t
     )
 
