@@ -90,6 +90,21 @@ class ParameterBuilder:
                 attrib={"Name": param_name, "Type": wf_arg_type},
             )
 
+        # Thêm attributes chuẩn SAC để hiển thị DisplayName & Description trong giao diện SAC GUI
+        attrs_el_list = prop_el.xpath("./*[local-name()='Property.Attributes']")
+        if attrs_el_list:
+            attrs_el = attrs_el_list[0]
+            for child in list(attrs_el):
+                attrs_el.remove(child)
+        else:
+            attrs_el = etree.SubElement(prop_el, engine.qn("x", "Property.Attributes"))
+
+        etree.SubElement(attrs_el, engine.qn("asw", "EnabledFlag2Attribute"), attrib={"EnabledFlag": "True"})
+        if disp:
+            etree.SubElement(attrs_el, engine.qn("asw", "DisplayName2Attribute"), attrib={"DisplayName": disp})
+        if description:
+            etree.SubElement(attrs_el, engine.qn("asw", "Description2Attribute"), attrib={"Description": description.strip()})
+
         # 2. Gán giá trị mặc định lên thẻ <Activity this:{Class}.{ParamName}="default_value">
         # (Chỉ áp dụng cho Input & Target; Output Parameter trong WF4 không gắn giá trị mặc định trên Activity root)
         short_class = engine.get_subassembly_class_short_name()

@@ -159,3 +159,36 @@ class LogicBuilder:
             "decision_location": f"{x_pos + 60.0},{y_pos}",
             "report_location": f"{x_pos + 260.0},{y_pos + 15.0}",
         }
+
+    @classmethod
+    def add_flow_decision(
+        cls,
+        engine: FlowchartEngine,
+        condition_expr: str,
+        display_name: str = "",
+        true_ref_id: Optional[str] = None,
+        false_ref_id: Optional[str] = None,
+        parent_node_id: Optional[str] = None,
+        x: float = 260.0,
+        y: float = 100.0,
+        auto_attach: bool = True,
+    ) -> dict:
+        """Tạo khối phân nhánh điều kiện FlowDecision trong Flowchart."""
+        dec_el, ref_id = engine.create_flow_decision(
+            condition_expr=condition_expr,
+            display_name=display_name,
+            true_ref_id=true_ref_id,
+            false_ref_id=false_ref_id,
+            x=x,
+            y=y,
+            parent_ref_id=parent_node_id,
+            auto_attach=auto_attach,
+        )
+        return {
+            "decision_node_id": ref_id,
+            "condition": condition_expr,
+            "display_name": display_name,
+            "true_branch": true_ref_id,
+            "false_branch": false_ref_id,
+            "element": dec_el,
+        }

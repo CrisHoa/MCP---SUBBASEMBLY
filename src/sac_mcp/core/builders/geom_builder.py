@@ -46,25 +46,16 @@ class GeometryBuilder:
         link_codes_str: str = "",
         is_auxiliary: bool = False,
         parent_node_id: Optional[str] = None,
+        target_container: Optional[etree._Element] = None,
     ) -> dict:
         point_code = point_code.strip()
         from_point = from_point.strip() or "Origin"
 
-        ref_id = engine.next_reference_id()
-        step_vs_id = engine.next_viewstate_idref("FlowStep")
         act_id = engine.next_activity_id()
         tag_name = "CreateAuxPoint" if is_auxiliary else "CreatePoint"
 
         display_title = (
             f"{point_code}&{link_name}" if (add_link and link_name) else point_code
-        )
-
-        flow_step = etree.Element(
-            engine.qn("wf", "FlowStep"),
-            attrib={
-                engine.qn("x", "Name"): ref_id,
-                engine.qn("sap2010", "WorkflowViewState.IdRef"): step_vs_id,
-            },
         )
 
         pos_str = "DeltaXAndDeltaY"
@@ -121,7 +112,7 @@ class GeometryBuilder:
         if not l_codes_list:
             pt_attrs["AutoLinkCodes"] = "{x:Null}"
 
-        pt_el = etree.SubElement(flow_step, engine.qn("asa2", tag_name), attrib=pt_attrs)
+        pt_el = etree.Element(engine.qn("asa2", tag_name), attrib=pt_attrs)
 
         args_el = etree.SubElement(pt_el, engine.qn("asa2", f"{tag_name}.Arguments"))
         p1_val = str(param_1_expr).strip()
@@ -257,6 +248,33 @@ class GeometryBuilder:
         exp = etree.SubElement(scg_d, engine.qn("x", "Boolean"), attrib={engine.qn("x", "Key"): "IsExpanded"})
         exp.text = "True"
 
+        if target_container is not None:
+            target_container.append(pt_el)
+            return {
+                "reference_id": None,
+                "linked_from_reference_id": None,
+                "point_code": point_code,
+                "is_auxiliary": is_auxiliary,
+                "from_point": from_point,
+                "point_type": point_type.value,
+                "param_1_expr": param_1_expr,
+                "param_2_expr": param_2_expr,
+                "add_link": add_link,
+                "link_name": link_name if add_link else None,
+                "view_location": None,
+            }
+
+        ref_id = engine.next_reference_id()
+        step_vs_id = engine.next_viewstate_idref("FlowStep")
+        flow_step = etree.Element(
+            engine.qn("wf", "FlowStep"),
+            attrib={
+                engine.qn("x", "Name"): ref_id,
+                engine.qn("sap2010", "WorkflowViewState.IdRef"): step_vs_id,
+            },
+        )
+        flow_step.append(pt_el)
+
         x_pos, y_pos = engine.compute_next_shape_location()
         linked_from = engine.attach_node_to_flowchart(
             new_node=flow_step,
@@ -299,22 +317,13 @@ class GeometryBuilder:
         is_auxiliary: bool = False,
         parent_node_id: Optional[str] = None,
         link_code: str = "",
+        target_container: Optional[etree._Element] = None,
     ) -> dict:
         actual_link_name = (link_name or link_code).strip()
         start_point = start_point.strip()
         end_point = end_point.strip()
-        ref_id = engine.next_reference_id()
-        step_vs_id = engine.next_viewstate_idref("FlowStep")
         act_id = engine.next_activity_id()
         tag_name = "CreateAuxLink" if is_auxiliary else "CreateLink"
-
-        flow_step = etree.Element(
-            engine.qn("wf", "FlowStep"),
-            attrib={
-                engine.qn("x", "Name"): ref_id,
-                engine.qn("sap2010", "WorkflowViewState.IdRef"): step_vs_id,
-            },
-        )
 
         link_attrs = {
             "ActivityId": act_id,
@@ -331,7 +340,6 @@ class GeometryBuilder:
             engine.qn("sap", "VirtualizedContainerService.HintSize"): "200,22.4",
         }
 
-
         codes_list = [
             c.strip().strip('"').strip("'")
             for c in link_codes_str.split(",")
@@ -340,7 +348,7 @@ class GeometryBuilder:
         if not codes_list:
             link_attrs["LinkCodes"] = "{x:Null}"
 
-        link_el = etree.SubElement(flow_step, engine.qn("asa2", tag_name), attrib=link_attrs)
+        link_el = etree.Element(engine.qn("asa2", tag_name), attrib=link_attrs)
 
         if codes_list:
             codes_container = etree.SubElement(link_el, engine.qn("asa2", f"{tag_name}.LinkCodes"))
@@ -359,6 +367,30 @@ class GeometryBuilder:
                     attrib={engine.qn("x", "TypeArguments"): "x:String"},
                 )
                 in_arg.text = c
+
+        if target_container is not None:
+            target_container.append(link_el)
+            return {
+                "reference_id": None,
+                "linked_from_reference_id": None,
+                "link_name": actual_link_name,
+                "start_point": start_point,
+                "end_point": end_point,
+                "link_codes": codes_list,
+                "is_auxiliary": is_auxiliary,
+                "view_location": None,
+            }
+
+        ref_id = engine.next_reference_id()
+        step_vs_id = engine.next_viewstate_idref("FlowStep")
+        flow_step = etree.Element(
+            engine.qn("wf", "FlowStep"),
+            attrib={
+                engine.qn("x", "Name"): ref_id,
+                engine.qn("sap2010", "WorkflowViewState.IdRef"): step_vs_id,
+            },
+        )
+        flow_step.append(link_el)
 
         x_pos, y_pos = engine.compute_next_shape_location()
         linked_from = engine.attach_node_to_flowchart(
@@ -379,7 +411,7 @@ class GeometryBuilder:
         return {
             "reference_id": ref_id,
             "linked_from_reference_id": linked_from or "Flowchart.StartNode",
-            "link_name": link_name,
+            "link_name": actual_link_name,
             "start_point": start_point,
             "end_point": end_point,
             "link_codes": codes_list,
@@ -753,25 +785,14 @@ class GeometryBuilder:
         shape_codes_str: str = "",
         parent_node_id: Optional[str] = None,
         shape_name: str = "",
+        target_container: Optional[etree._Element] = None,
     ) -> dict:
         actual_shape_code = (shape_code or shape_name).strip()
         links_list = [lk.strip() for lk in (link_names or []) if lk.strip()]
         links_csv = ",".join(links_list)
-
-        ref_id = engine.next_reference_id()
-        step_vs_id = engine.next_viewstate_idref("FlowStep")
         act_id = engine.next_activity_id()
 
-        flow_step = etree.Element(
-            engine.qn("wf", "FlowStep"),
-            attrib={
-                engine.qn("x", "Name"): ref_id,
-                engine.qn("sap2010", "WorkflowViewState.IdRef"): step_vs_id,
-            },
-        )
-
-        shape_el = etree.SubElement(
-            flow_step,
+        shape_el = etree.Element(
             engine.qn("asa2", "CreateShape"),
             attrib={
                 "ActivityId": act_id,
@@ -785,7 +806,6 @@ class GeometryBuilder:
                 engine.qn("sap", "VirtualizedContainerService.HintSize"): "200,22.4",
             },
         )
-
 
         comp_el = etree.SubElement(shape_el, engine.qn("asa2", "CreateShape.ComponentNames"))
         for lk in links_list:
@@ -824,6 +844,28 @@ class GeometryBuilder:
         exp = etree.SubElement(scg_d, engine.qn("x", "Boolean"), attrib={engine.qn("x", "Key"): "IsExpanded"})
         exp.text = "True"
 
+        if target_container is not None:
+            target_container.append(shape_el)
+            return {
+                "reference_id": None,
+                "linked_from_reference_id": None,
+                "shape_code": actual_shape_code,
+                "link_list": links_list,
+                "shape_codes": shape_codes_str,
+                "view_location": None,
+            }
+
+        ref_id = engine.next_reference_id()
+        step_vs_id = engine.next_viewstate_idref("FlowStep")
+        flow_step = etree.Element(
+            engine.qn("wf", "FlowStep"),
+            attrib={
+                engine.qn("x", "Name"): ref_id,
+                engine.qn("sap2010", "WorkflowViewState.IdRef"): step_vs_id,
+            },
+        )
+        flow_step.append(shape_el)
+
         x_pos, y_pos = engine.compute_next_shape_location()
         linked_from = engine.attach_node_to_flowchart(
             new_node=flow_step,
@@ -843,7 +885,7 @@ class GeometryBuilder:
         return {
             "reference_id": ref_id,
             "linked_from_reference_id": linked_from or "Flowchart.StartNode",
-            "shape_code": shape_code,
+            "shape_code": actual_shape_code,
             "link_list": links_list,
             "shape_codes": shape_codes_str,
             "view_location": f"{x_pos},{y_pos}",

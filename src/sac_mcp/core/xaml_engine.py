@@ -283,6 +283,138 @@ class FlowchartEngine:
         xref.text = new_ref_id
         return parent_name
 
+    def create_sequence_step(
+        self,
+        display_name: str,
+        x: float = 200.0,
+        y: float = 100.0,
+        parent_ref_id: Optional[str] = None,
+        auto_attach: bool = True,
+    ) -> Tuple[etree._Element, etree._Element, str]:
+        """
+        Tạo một FlowStep chứa khối <Sequence DisplayName="..."> chuẩn Autodesk Subassembly Composer.
+        Trả về: (flow_step_el, sequence_el, ref_id)
+        """
+        ref_id = self.next_reference_id()
+        step_vs_id = self.next_viewstate_idref("FlowStep")
+        seq_vs_id = self.next_viewstate_idref("Sequence")
+
+        flow_step = etree.Element(
+            self.qn("wf", "FlowStep"),
+            attrib={
+                self.qn("x", "Name"): ref_id,
+                self.qn("sap2010", "WorkflowViewState.IdRef"): step_vs_id,
+            },
+        )
+        seq_el = etree.SubElement(
+            flow_step,
+            self.qn("wf", "Sequence"),
+            attrib={
+                "DisplayName": display_name,
+                self.qn("sap2010", "WorkflowViewState.IdRef"): seq_vs_id,
+            },
+        )
+        seq_vss = etree.SubElement(seq_el, self.qn("sap", "WorkflowViewStateService.ViewState"))
+        seq_scg = etree.SubElement(
+            seq_vss,
+            self.qn("scg", "Dictionary"),
+            attrib={self.qn("x", "TypeArguments"): "x:String, x:Object"},
+        )
+        seq_exp = etree.SubElement(seq_scg, self.qn("x", "Boolean"), attrib={self.qn("x", "Key"): "IsExpanded"})
+        seq_exp.text = "True"
+
+        if auto_attach:
+            self.attach_node_to_flowchart(
+                new_node=flow_step,
+                new_ref_id=ref_id,
+                parent_ref_id=parent_ref_id,
+            )
+        else:
+            self.get_flowchart_element().append(flow_step)
+
+        self.register_view_state(
+            id_ref=step_vs_id,
+            x=x,
+            y=y,
+            width=200.0,
+            height=52.0,
+        )
+        return flow_step, seq_el, ref_id
+
+    def create_flow_decision(
+        self,
+        condition_expr: str,
+        display_name: str = "",
+        true_ref_id: Optional[str] = None,
+        false_ref_id: Optional[str] = None,
+        x: float = 260.0,
+        y: float = 100.0,
+        parent_ref_id: Optional[str] = None,
+        auto_attach: bool = True,
+    ) -> Tuple[etree._Element, str]:
+        """
+        Tạo khối <FlowDecision> chuẩn WF4/SAC với biểu thức điều kiện và 2 nhánh True / False.
+        """
+        ref_id = self.next_reference_id()
+        dec_vs_id = self.next_viewstate_idref("FlowDecision")
+        cond_formatted = condition_expr.strip()
+        if not cond_formatted.startswith("["):
+            cond_formatted = f"[{cond_formatted}]"
+
+        disp = display_name.strip() or f"If ({condition_expr.strip()})"
+        dec_el = etree.Element(
+            self.qn("wf", "FlowDecision"),
+            attrib={
+                self.qn("x", "Name"): ref_id,
+                "Condition": cond_formatted,
+                "DisplayName": disp,
+                self.qn("sap2010", "WorkflowViewState.IdRef"): dec_vs_id,
+            },
+        )
+        if true_ref_id:
+            tb = etree.SubElement(dec_el, self.qn("wf", "FlowDecision.True"))
+            etree.SubElement(tb, self.qn("x", "Reference")).text = true_ref_id
+        if false_ref_id:
+            fb = etree.SubElement(dec_el, self.qn("wf", "FlowDecision.False"))
+            etree.SubElement(fb, self.qn("x", "Reference")).text = false_ref_id
+
+        if auto_attach:
+            self.attach_node_to_flowchart(
+                new_node=dec_el,
+                new_ref_id=ref_id,
+                parent_ref_id=parent_ref_id,
+            )
+        else:
+            self.get_flowchart_element().append(dec_el)
+
+        self.register_view_state(
+            id_ref=dec_vs_id,
+            x=x,
+            y=y,
+            width=79.0,
+            height=87.0,
+        )
+        return dec_el, ref_id
+
+    def set_decision_branches(
+        self,
+        decision_el: etree._Element,
+        true_ref_id: Optional[str] = None,
+        false_ref_id: Optional[str] = None,
+    ) -> None:
+        """Thiết lập hoặc cập nhật tham chiếu 2 nhánh True / False cho FlowDecision."""
+        if true_ref_id:
+            for child in decision_el.xpath("./*[local-name()='FlowDecision.True']"):
+                decision_el.remove(child)
+            tb = etree.SubElement(decision_el, self.qn("wf", "FlowDecision.True"))
+            etree.SubElement(tb, self.qn("x", "Reference")).text = true_ref_id
+
+        if false_ref_id:
+            for child in decision_el.xpath("./*[local-name()='FlowDecision.False']"):
+                decision_el.remove(child)
+            fb = etree.SubElement(decision_el, self.qn("wf", "FlowDecision.False"))
+            etree.SubElement(fb, self.qn("x", "Reference")).text = false_ref_id
+
     # ========================================================================
     # Các hàm Inspect / Trích xuất dữ liệu từ Flowchart.xaml (Chuẩn Native + Builder)
     # ========================================================================
