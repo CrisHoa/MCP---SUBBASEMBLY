@@ -693,15 +693,27 @@ class GeometryBuilder:
         arg1 = etree.SubElement(
             args_el,
             engine.qn("wf", "InArgument"),
-            attrib={engine.qn("x", "TypeArguments"): "x:String", engine.qn("x", "Key"): "Link1"},
+            attrib={engine.qn("x", "TypeArguments"): "x:String", engine.qn("x", "Key"): "FirstLink1"},
         )
         arg1.text = link1.strip()
         arg2 = etree.SubElement(
             args_el,
             engine.qn("wf", "InArgument"),
-            attrib={engine.qn("x", "TypeArguments"): "x:String", engine.qn("x", "Key"): "Link2"},
+            attrib={engine.qn("x", "TypeArguments"): "x:String", engine.qn("x", "Key"): "SecondLink1"},
         )
         arg2.text = link2.strip()
+        ext1 = etree.SubElement(
+            args_el,
+            engine.qn("wf", "InArgument"),
+            attrib={engine.qn("x", "TypeArguments"): "x:Boolean", engine.qn("x", "Key"): "ExtendFirstLink1"},
+        )
+        ext1.text = "True"
+        ext2 = etree.SubElement(
+            args_el,
+            engine.qn("wf", "InArgument"),
+            attrib={engine.qn("x", "TypeArguments"): "x:Boolean", engine.qn("x", "Key"): "ExtendSecondLink1"},
+        )
+        ext2.text = "True"
 
         codes_list = [
             c.strip().strip('"').strip("'")
@@ -844,6 +856,333 @@ class GeometryBuilder:
             "display_name": display_name,
             "depth_expr": depth_expr,
             "end_point_name": end_point_name,
+            "view_location": f"{x_pos},{y_pos}",
+        }
+
+    @classmethod
+    def add_curve(
+        cls,
+        engine: FlowchartEngine,
+        link_number: str,
+        start_point: str,
+        end_point: str,
+        center_point: Optional[str] = None,
+        creation_type: str = "ArcGeneral",
+        num_increments: int = 5,
+        link_codes_str: str = "",
+        is_auxiliary: bool = False,
+        parent_node_id: Optional[str] = None,
+        target_container: Optional[etree._Element] = None,
+    ) -> dict:
+        """Tạo đối tượng CreateCurve hoặc CreateAuxCurve chuẩn Native SAC."""
+        link_number = link_number.strip()
+        start_point = start_point.strip()
+        end_point = end_point.strip()
+        act_id = engine.next_activity_id()
+        tag_name = "CreateAuxCurve" if is_auxiliary else "CreateCurve"
+
+        curve_attrs = {
+            "ActivityId": act_id,
+            "CreationType": creation_type,
+            "DisplayName": link_number,
+            "EndPoint": end_point,
+            "Geometry": "[Geometry]",
+            "LinkNumber": link_number,
+            "NoIncrements": str(num_increments),
+            "ShowErrors": "True",
+            "Side": "[Side]",
+            "StartPoint": start_point,
+            "SubassemblyErrorCenter": "[SubassemblyErrorCenter]",
+            "SubassemblyRunMode": "[SubassemblyRunMode]",
+            engine.qn("sap", "VirtualizedContainerService.HintSize"): "200,22.4",
+        }
+
+        codes_list = [
+            c.strip().strip('"').strip("'")
+            for c in link_codes_str.split(",")
+            if c.strip().strip('"').strip("'")
+        ]
+        if not codes_list:
+            curve_attrs["LinkCodes"] = "{x:Null}"
+
+        curve_el = etree.Element(engine.qn("asa2", tag_name), attrib=curve_attrs)
+
+        args_el = etree.SubElement(curve_el, engine.qn("asa2", f"{tag_name}.Arguments"))
+        if center_point:
+            cp_arg = etree.SubElement(
+                args_el,
+                engine.qn("wf", "InArgument"),
+                attrib={engine.qn("x", "TypeArguments"): "x:String", engine.qn("x", "Key"): "CenterPoint"},
+            )
+            cp_arg.text = center_point.strip()
+
+        if codes_list:
+            codes_container = etree.SubElement(curve_el, engine.qn("asa2", f"{tag_name}.LinkCodes"))
+            scg_list = etree.SubElement(
+                codes_container,
+                engine.qn("scg", "List"),
+                attrib={
+                    engine.qn("x", "TypeArguments"): "InArgument(x:String)",
+                    "Capacity": str(max(4, len(codes_list))),
+                },
+            )
+            for c in codes_list:
+                in_arg = etree.SubElement(
+                    scg_list,
+                    engine.qn("wf", "InArgument"),
+                    attrib={engine.qn("x", "TypeArguments"): "x:String"},
+                )
+                in_arg.text = c
+
+        if target_container is not None:
+            target_container.append(curve_el)
+            return {
+                "reference_id": None,
+                "linked_from_reference_id": None,
+                "link_number": link_number,
+                "start_point": start_point,
+                "end_point": end_point,
+                "creation_type": creation_type,
+            }
+
+        ref_id = engine.next_reference_id()
+        step_vs_id = engine.next_viewstate_idref("FlowStep")
+        flow_step = etree.Element(
+            engine.qn("wf", "FlowStep"),
+            attrib={
+                engine.qn("x", "Name"): ref_id,
+                engine.qn("sap2010", "WorkflowViewState.IdRef"): step_vs_id,
+            },
+        )
+        flow_step.append(curve_el)
+
+        x_pos, y_pos = engine.compute_next_shape_location()
+        linked_from = engine.attach_node_to_flowchart(
+            new_node=flow_step,
+            new_ref_id=ref_id,
+            parent_ref_id=parent_node_id,
+        )
+        engine.register_view_state(
+            id_ref=step_vs_id,
+            x=x_pos,
+            y=y_pos,
+            width=200.0,
+            height=52.0,
+        )
+
+        return {
+            "reference_id": ref_id,
+            "linked_from_reference_id": linked_from or "Flowchart.StartNode",
+            "link_number": link_number,
+            "start_point": start_point,
+            "end_point": end_point,
+            "creation_type": creation_type,
+            "view_location": f"{x_pos},{y_pos}",
+        }
+
+    @classmethod
+    def add_offset_geometry(
+        cls,
+        engine: FlowchartEngine,
+        offset_code: str,
+        links: list[str],
+        offset_distance: float = 0.15,
+        offset_codes_str: str = "",
+        parent_node_id: Optional[str] = None,
+        target_container: Optional[etree._Element] = None,
+    ) -> dict:
+        """Tạo khối CreateOffset chuẩn Native SAC."""
+        offset_code = offset_code.strip()
+        links_joined = ",".join(lk.strip() for lk in links if lk.strip())
+        act_id = engine.next_activity_id()
+
+        off_attrs = {
+            "ActivityId": act_id,
+            "DisplayName": offset_code,
+            "Geometry": "[Geometry]",
+            "Links": links_joined,
+            "OffsetDistance": str(offset_distance),
+            "OffsetNumber": offset_code,
+            "ShowErrors": "True",
+            "SubassemblyErrorCenter": "[SubassemblyErrorCenter]",
+            "SubassemblyRunMode": "[SubassemblyRunMode]",
+            engine.qn("sap", "VirtualizedContainerService.HintSize"): "200,22.4",
+        }
+
+        codes_list = [
+            c.strip().strip('"').strip("'")
+            for c in offset_codes_str.split(",")
+            if c.strip().strip('"').strip("'")
+        ]
+        if not codes_list:
+            off_attrs["OffsetCodes"] = "{x:Null}"
+
+        off_el = etree.Element(engine.qn("asa2", "CreateOffset"), attrib=off_attrs)
+
+        comp_el = etree.SubElement(off_el, engine.qn("asa2", "CreateOffset.ComponentNames"))
+        for lk in links:
+            s_el = etree.SubElement(comp_el, engine.qn("x", "String"))
+            s_el.text = lk.strip()
+
+        if codes_list:
+            codes_container = etree.SubElement(off_el, engine.qn("asa2", "CreateOffset.OffsetCodes"))
+            scg_list = etree.SubElement(
+                codes_container,
+                engine.qn("scg", "List"),
+                attrib={
+                    engine.qn("x", "TypeArguments"): "InArgument(x:String)",
+                    "Capacity": str(max(4, len(codes_list))),
+                },
+            )
+            for c in codes_list:
+                in_arg = etree.SubElement(
+                    scg_list,
+                    engine.qn("wf", "InArgument"),
+                    attrib={engine.qn("x", "TypeArguments"): "x:String"},
+                )
+                in_arg.text = c
+
+        if target_container is not None:
+            target_container.append(off_el)
+            return {
+                "reference_id": None,
+                "linked_from_reference_id": None,
+                "offset_code": offset_code,
+                "links": links,
+                "distance": offset_distance,
+            }
+
+        ref_id = engine.next_reference_id()
+        step_vs_id = engine.next_viewstate_idref("FlowStep")
+        flow_step = etree.Element(
+            engine.qn("wf", "FlowStep"),
+            attrib={
+                engine.qn("x", "Name"): ref_id,
+                engine.qn("sap2010", "WorkflowViewState.IdRef"): step_vs_id,
+            },
+        )
+        flow_step.append(off_el)
+
+        x_pos, y_pos = engine.compute_next_shape_location()
+        linked_from = engine.attach_node_to_flowchart(
+            new_node=flow_step,
+            new_ref_id=ref_id,
+            parent_ref_id=parent_node_id,
+        )
+        engine.register_view_state(
+            id_ref=step_vs_id,
+            x=x_pos,
+            y=y_pos,
+            width=200.0,
+            height=52.0,
+        )
+
+        return {
+            "reference_id": ref_id,
+            "linked_from_reference_id": linked_from or "Flowchart.StartNode",
+            "offset_code": offset_code,
+            "links": links,
+            "distance": offset_distance,
+            "view_location": f"{x_pos},{y_pos}",
+        }
+
+    @classmethod
+    def add_get_mark_point(
+        cls,
+        engine: FlowchartEngine,
+        point_number: str,
+        mark_name: str,
+        point_codes_str: str = "",
+        is_auxiliary: bool = False,
+        parent_node_id: Optional[str] = None,
+        target_container: Optional[etree._Element] = None,
+    ) -> dict:
+        """Tạo Activity GetMarkPointActivity hoặc GetAuxMarkPointActivity."""
+        point_number = point_number.strip()
+        mark_name = mark_name.strip()
+        act_id = engine.next_activity_id()
+        tag_name = "GetAuxMarkPointActivity" if is_auxiliary else "GetMarkPointActivity"
+
+        mp_attrs = {
+            "ActivityId": act_id,
+            "DisplayName": f"{point_number}({mark_name})",
+            "Geometry": "[Geometry]",
+            "MarkName": mark_name,
+            "PointNumber": point_number,
+            "ShowErrors": "True",
+            "Side": "[Side]",
+            "SubassemblyErrorCenter": "[SubassemblyErrorCenter]",
+            "SubassemblyRunMode": "[SubassemblyRunMode]",
+            engine.qn("sap", "VirtualizedContainerService.HintSize"): "200,22.4",
+        }
+
+        codes_list = [
+            c.strip().strip('"').strip("'")
+            for c in point_codes_str.split(",")
+            if c.strip().strip('"').strip("'")
+        ]
+        if not codes_list:
+            mp_attrs["PointCodes"] = "{x:Null}"
+
+        mp_el = etree.Element(engine.qn("asa2", tag_name), attrib=mp_attrs)
+
+        if codes_list:
+            codes_container = etree.SubElement(mp_el, engine.qn("asa2", f"{tag_name}.PointCodes"))
+            scg_list = etree.SubElement(
+                codes_container,
+                engine.qn("scg", "List"),
+                attrib={
+                    engine.qn("x", "TypeArguments"): "InArgument(x:String)",
+                    "Capacity": str(max(4, len(codes_list))),
+                },
+            )
+            for c in codes_list:
+                in_arg = etree.SubElement(
+                    scg_list,
+                    engine.qn("wf", "InArgument"),
+                    attrib={engine.qn("x", "TypeArguments"): "x:String"},
+                )
+                in_arg.text = c
+
+        if target_container is not None:
+            target_container.append(mp_el)
+            return {
+                "reference_id": None,
+                "linked_from_reference_id": None,
+                "point_number": point_number,
+                "mark_name": mark_name,
+            }
+
+        ref_id = engine.next_reference_id()
+        step_vs_id = engine.next_viewstate_idref("FlowStep")
+        flow_step = etree.Element(
+            engine.qn("wf", "FlowStep"),
+            attrib={
+                engine.qn("x", "Name"): ref_id,
+                engine.qn("sap2010", "WorkflowViewState.IdRef"): step_vs_id,
+            },
+        )
+        flow_step.append(mp_el)
+
+        x_pos, y_pos = engine.compute_next_shape_location()
+        linked_from = engine.attach_node_to_flowchart(
+            new_node=flow_step,
+            new_ref_id=ref_id,
+            parent_ref_id=parent_node_id,
+        )
+        engine.register_view_state(
+            id_ref=step_vs_id,
+            x=x_pos,
+            y=y_pos,
+            width=200.0,
+            height=52.0,
+        )
+
+        return {
+            "reference_id": ref_id,
+            "linked_from_reference_id": linked_from or "Flowchart.StartNode",
+            "point_number": point_number,
+            "mark_name": mark_name,
             "view_location": f"{x_pos},{y_pos}",
         }
 
