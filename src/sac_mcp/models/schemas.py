@@ -47,13 +47,36 @@ class ParameterDataType(str, Enum):
 
 
 class PointGeometryType(str, Enum):
-    """Các phương thức xác định tọa độ Point phổ biến trong SAC."""
+    """Đầy đủ 9 phương thức xác định tọa độ Point trong Autodesk Subassembly Composer."""
     DELTA_X_DELTA_Y = "DeltaX_DeltaY"
     SLOPE_DELTA_X = "Slope_DeltaX"
     SLOPE_DELTA_Y = "Slope_DeltaY"
-    ANGLE_DISTANCE = "Angle_Distance"
     SLOPE_TO_SURFACE = "Slope_To_Surface"
+    DELTA_X_ON_SURFACE = "DeltaX_On_Surface"
+    ANGLE_DELTA_X = "Angle_DeltaX"
+    ANGLE_DELTA_Y = "Angle_DeltaY"
+    ANGLE_DISTANCE = "Angle_Distance"
     INTERPOLATE = "Interpolate"
+
+
+class CurveType(str, Enum):
+    """Kiểu dựng cung cong trong SAC."""
+    ARC_GENERAL = "ArcGeneral"
+    ARC_3_POINTS = "Arc3Points"
+    PARABOLA_GENERAL = "ParabolaGeneral"
+
+
+class IntersectionType(str, Enum):
+    """Kiểu tìm giao điểm hình học trong SAC."""
+    TWO_LINKS = "IntersectionTwoLinks"
+    LINK_POINT_SLOPE = "IntersectionLinkPointSlope"
+    TWO_POINTS_SLOPE = "IntersectionTwoPointsSlope"
+
+
+class RoundDaylightType(str, Enum):
+    """Kiểu bo cong chân taluy tiếp giáp mặt đất."""
+    BY_RADIUS = "Radius"
+    BY_LENGTH = "Length"
 
 
 class ReportMessageType(str, Enum):

@@ -65,10 +65,16 @@ class GeometryBuilder:
             pos_str = "SlopeAndDeltaY"
         elif point_type == PointGeometryType.SLOPE_TO_SURFACE:
             pos_str = "SlopeToSurface"
+        elif point_type == PointGeometryType.DELTA_X_ON_SURFACE:
+            pos_str = "DeltaXOnSurface"
+        elif point_type == PointGeometryType.ANGLE_DELTA_X:
+            pos_str = "AngleAndDeltaX"
+        elif point_type == PointGeometryType.ANGLE_DELTA_Y:
+            pos_str = "AngleAndDeltaY"
         elif point_type == PointGeometryType.ANGLE_DISTANCE:
             pos_str = "AngleAndDistance"
         elif point_type == PointGeometryType.INTERPOLATE:
-            pos_str = "Interpolate"
+            pos_str = "InterpolatePoint"
 
         pt_attrs = {
             "ActivityId": act_id,
@@ -148,13 +154,13 @@ class GeometryBuilder:
             a1 = etree.SubElement(
                 args_el,
                 engine.qn("wf", "InArgument"),
-                attrib={engine.qn("x", "TypeArguments"): "x:Double", engine.qn("x", "Key"): "Slope2"},
+                attrib={engine.qn("x", "TypeArguments"): "x:Double", engine.qn("x", "Key"): "Slope5"},
             )
             a1.text = format_arg_expr(p1_val)
             a2 = etree.SubElement(
                 args_el,
                 engine.qn("wf", "InArgument"),
-                attrib={engine.qn("x", "TypeArguments"): "x:Double", engine.qn("x", "Key"): "DeltaY2"},
+                attrib={engine.qn("x", "TypeArguments"): "x:Double", engine.qn("x", "Key"): "DeltaY5"},
             )
             a2.text = format_arg_expr(p2_val)
         elif pos_str == "SlopeToSurface":
@@ -188,6 +194,71 @@ class GeometryBuilder:
                 attrib={engine.qn("x", "TypeArguments"): "x:Boolean", engine.qn("x", "Key"): "ShowErrors"},
             )
             se.text = "True"
+        elif pos_str == "DeltaXOnSurface":
+            a1 = etree.SubElement(
+                args_el,
+                engine.qn("wf", "InArgument"),
+                attrib={engine.qn("x", "TypeArguments"): "x:Double", engine.qn("x", "Key"): "DeltaX4"},
+            )
+            a1.text = format_arg_expr(p1_val)
+            st = etree.SubElement(
+                args_el,
+                engine.qn("wf", "InArgument"),
+                attrib={engine.qn("x", "TypeArguments"): "asw:SurfaceTarget", engine.qn("x", "Key"): "SurfaceTarget4"},
+            )
+            st.text = format_arg_expr(p2_val)
+        elif pos_str == "AngleAndDeltaX":
+            a1 = etree.SubElement(
+                args_el,
+                engine.qn("wf", "InArgument"),
+                attrib={engine.qn("x", "TypeArguments"): "x:Double", engine.qn("x", "Key"): "Angle6"},
+            )
+            a1.text = format_arg_expr(p1_val)
+            a2 = etree.SubElement(
+                args_el,
+                engine.qn("wf", "InArgument"),
+                attrib={engine.qn("x", "TypeArguments"): "x:Double", engine.qn("x", "Key"): "DeltaX6"},
+            )
+            a2.text = format_arg_expr(p2_val)
+        elif pos_str == "AngleAndDeltaY":
+            a1 = etree.SubElement(
+                args_el,
+                engine.qn("wf", "InArgument"),
+                attrib={engine.qn("x", "TypeArguments"): "x:Double", engine.qn("x", "Key"): "Angle7"},
+            )
+            a1.text = format_arg_expr(p1_val)
+            a2 = etree.SubElement(
+                args_el,
+                engine.qn("wf", "InArgument"),
+                attrib={engine.qn("x", "TypeArguments"): "x:Double", engine.qn("x", "Key"): "DeltaY7"},
+            )
+            a2.text = format_arg_expr(p2_val)
+        elif pos_str == "AngleAndDistance":
+            a1 = etree.SubElement(
+                args_el,
+                engine.qn("wf", "InArgument"),
+                attrib={engine.qn("x", "TypeArguments"): "x:Double", engine.qn("x", "Key"): "Angle8"},
+            )
+            a1.text = format_arg_expr(p1_val)
+            a2 = etree.SubElement(
+                args_el,
+                engine.qn("wf", "InArgument"),
+                attrib={engine.qn("x", "TypeArguments"): "x:Double", engine.qn("x", "Key"): "Distance8"},
+            )
+            a2.text = format_arg_expr(p2_val)
+        elif pos_str == "InterpolatePoint":
+            a1 = etree.SubElement(
+                args_el,
+                engine.qn("wf", "InArgument"),
+                attrib={engine.qn("x", "TypeArguments"): "x:String", engine.qn("x", "Key"): "DestPoint"},
+            )
+            a1.text = p1_val.strip('"').strip("'")
+            a2 = etree.SubElement(
+                args_el,
+                engine.qn("wf", "InArgument"),
+                attrib={engine.qn("x", "TypeArguments"): "x:Double", engine.qn("x", "Key"): "InterpolateParam"},
+            )
+            a2.text = format_arg_expr(p2_val)
         else:
             a1 = etree.SubElement(
                 args_el,
