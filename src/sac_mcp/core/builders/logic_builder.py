@@ -32,14 +32,14 @@ class LogicBuilder:
         msg_step_vs_id = engine.next_viewstate_idref("FlowStep")
         act_id = engine.next_activity_id()
 
-        # ErrorLevel map
+        # ErrorLevel map (Autodesk Native ErrorLevel: Informational, Warning, Error)
         level_map = {
-            ReportMessageType.INFORMATION: "Information",
+            ReportMessageType.INFORMATIONAL: "Informational",
             ReportMessageType.WARNING: "Warning",
             ReportMessageType.ERROR: "Error",
         }
 
-        level_val = level_map.get(message_type, "Warning")
+        level_val = level_map.get(message_type, "Informational")
 
         msg_step = etree.Element(
             engine.qn("wf", "FlowStep"),
@@ -158,6 +158,357 @@ class LogicBuilder:
             "message_expr": message_expr,
             "decision_location": f"{x_pos + 60.0},{y_pos}",
             "report_location": f"{x_pos + 260.0},{y_pos + 15.0}",
+        }
+
+    @classmethod
+    def add_define_variable(
+        cls,
+        engine: FlowchartEngine,
+        variable_name: str,
+        variable_type: str = "Double",
+        default_value_expr: str = "0.0",
+        parent_node_id: Optional[str] = None,
+        target_container: Optional[etree._Element] = None,
+    ) -> dict:
+        """Tạo Activity InternalVariableDefine chuẩn Native SAC."""
+        variable_name = variable_name.strip()
+        act_id = engine.next_activity_id()
+
+        # Ánh xạ kiểu biến CLR
+        type_map = {
+            "Double": "x:Double",
+            "Int32": "x:Int32",
+            "Integer": "x:Int32",
+            "String": "x:String",
+            "Boolean": "x:Boolean",
+        }
+        clr_type = type_map.get(variable_type, "x:Double")
+
+        # Đăng ký biến vào <Flowchart.Variables>
+        engine.add_flowchart_variable(name=variable_name, type_arguments=clr_type)
+
+        var_attrs = {
+            "ActivityId": act_id,
+            "DisplayName": f"Define {variable_name}",
+            "ShowErrors": "True",
+            "SubassemblyErrorCenter": "[SubassemblyErrorCenter]",
+            "SubassemblyRunMode": "[SubassemblyRunMode]",
+            "VariableName": variable_name,
+            "VariableType": variable_type,
+            engine.qn("sap", "VirtualizedContainerService.HintSize"): "200,22.4",
+        }
+
+        var_el = etree.Element(engine.qn("asa2", "InternalVariableDefine"), attrib=var_attrs)
+
+        def_val = etree.SubElement(var_el, engine.qn("asa2", "InternalVariableDefine.DefaultValue"))
+        in_arg = etree.SubElement(
+            def_val,
+            engine.qn("wf", "InArgument"),
+            attrib={engine.qn("x", "TypeArguments"): clr_type},
+        )
+        in_arg.text = str(default_value_expr).strip()
+
+        # Variable OutArgument [VariableName]
+        var_slot = etree.SubElement(var_el, engine.qn("asa2", "InternalVariableDefine.Variable"))
+        var_out_arg = etree.SubElement(
+            var_slot,
+            engine.qn("wf", "OutArgument"),
+            attrib={engine.qn("x", "TypeArguments"): clr_type},
+        )
+        var_out_arg.text = f"[{variable_name}]"
+
+        if target_container is not None:
+            target_container.append(var_el)
+            return {
+                "reference_id": None,
+                "variable_name": variable_name,
+                "variable_type": variable_type,
+            }
+
+        ref_id = engine.next_reference_id()
+        step_vs_id = engine.next_viewstate_idref("FlowStep")
+        flow_step = etree.Element(
+            engine.qn("wf", "FlowStep"),
+            attrib={
+                engine.qn("x", "Name"): ref_id,
+                engine.qn("sap2010", "WorkflowViewState.IdRef"): step_vs_id,
+            },
+        )
+        flow_step.append(var_el)
+
+        x_pos, y_pos = engine.compute_next_shape_location()
+        linked_from = engine.attach_node_to_flowchart(
+            new_node=flow_step,
+            new_ref_id=ref_id,
+            parent_ref_id=parent_node_id,
+        )
+        engine.register_view_state(
+            id_ref=step_vs_id,
+            x=x_pos,
+            y=y_pos,
+            width=200.0,
+            height=52.0,
+        )
+
+        return {
+            "reference_id": ref_id,
+            "linked_from_reference_id": linked_from or "Flowchart.StartNode",
+            "variable_name": variable_name,
+            "variable_type": variable_type,
+            "view_location": f"{x_pos},{y_pos}",
+        }
+
+    @classmethod
+    def add_set_variable_value(
+        cls,
+        engine: FlowchartEngine,
+        variable_name: str,
+        value_expr: str,
+        variable_type: str = "Double",
+        parent_node_id: Optional[str] = None,
+        target_container: Optional[etree._Element] = None,
+    ) -> dict:
+        """Tạo Activity SetVariableValue chuẩn Native SAC."""
+        variable_name = variable_name.strip()
+        act_id = engine.next_activity_id()
+
+        type_map = {
+            "Double": "x:Double",
+            "Int32": "x:Int32",
+            "Integer": "x:Int32",
+            "String": "x:String",
+            "Boolean": "x:Boolean",
+        }
+        clr_type = type_map.get(variable_type, "x:Double")
+
+        set_attrs = {
+            "ActivityId": act_id,
+            "DisplayName": f"Set {variable_name}",
+            "ShowErrors": "True",
+            "SubassemblyErrorCenter": "[SubassemblyErrorCenter]",
+            "SubassemblyRunMode": "[SubassemblyRunMode]",
+            engine.qn("sap", "VirtualizedContainerService.HintSize"): "200,22.4",
+        }
+
+        set_el = etree.Element(engine.qn("asa2", "SetVariableValue"), attrib=set_attrs)
+
+        vn_el = etree.SubElement(set_el, engine.qn("asa2", "SetVariableValue.VariableName"))
+        out_arg = etree.SubElement(
+            vn_el,
+            engine.qn("wf", "OutArgument"),
+            attrib={engine.qn("x", "TypeArguments"): clr_type},
+        )
+        out_arg.text = f"[{variable_name}]"
+
+        vv_el = etree.SubElement(set_el, engine.qn("asa2", "SetVariableValue.VariableValue"))
+        in_arg = etree.SubElement(
+            vv_el,
+            engine.qn("wf", "InArgument"),
+            attrib={engine.qn("x", "TypeArguments"): clr_type},
+        )
+        s_val = str(value_expr).strip()
+        in_arg.text = s_val if (s_val.startswith("[") and s_val.endswith("]")) else f"[{s_val}]"
+
+        if target_container is not None:
+            target_container.append(set_el)
+            return {
+                "reference_id": None,
+                "variable_name": variable_name,
+                "value_expr": value_expr,
+            }
+
+        ref_id = engine.next_reference_id()
+        step_vs_id = engine.next_viewstate_idref("FlowStep")
+        flow_step = etree.Element(
+            engine.qn("wf", "FlowStep"),
+            attrib={
+                engine.qn("x", "Name"): ref_id,
+                engine.qn("sap2010", "WorkflowViewState.IdRef"): step_vs_id,
+            },
+        )
+        flow_step.append(set_el)
+
+        x_pos, y_pos = engine.compute_next_shape_location()
+        linked_from = engine.attach_node_to_flowchart(
+            new_node=flow_step,
+            new_ref_id=ref_id,
+            parent_ref_id=parent_node_id,
+        )
+        engine.register_view_state(
+            id_ref=step_vs_id,
+            x=x_pos,
+            y=y_pos,
+            width=200.0,
+            height=52.0,
+        )
+
+        return {
+            "reference_id": ref_id,
+            "linked_from_reference_id": linked_from or "Flowchart.StartNode",
+            "variable_name": variable_name,
+            "value_expr": value_expr,
+            "view_location": f"{x_pos},{y_pos}",
+        }
+
+    @classmethod
+    def add_set_output_parameter(
+        cls,
+        engine: FlowchartEngine,
+        parameter_name: str,
+        value_expr: str,
+        parameter_type: str = "Double",
+        parent_node_id: Optional[str] = None,
+        target_container: Optional[etree._Element] = None,
+    ) -> dict:
+        """Tạo Activity SetOutputParameterValue chuẩn Native SAC."""
+        parameter_name = parameter_name.strip()
+        act_id = engine.next_activity_id()
+
+        type_map = {
+            "Double": "x:Double",
+            "Int32": "x:Int32",
+            "Integer": "x:Int32",
+            "String": "x:String",
+            "Boolean": "x:Boolean",
+        }
+        clr_type = type_map.get(parameter_type, "x:Double")
+
+        out_attrs = {
+            "ActivityId": act_id,
+            "DisplayName": f"Out {parameter_name}",
+            "ShowErrors": "True",
+            "SubassemblyErrorCenter": "[SubassemblyErrorCenter]",
+            "SubassemblyRunMode": "[SubassemblyRunMode]",
+            engine.qn("sap", "VirtualizedContainerService.HintSize"): "200,22.4",
+        }
+
+        out_el = etree.Element(engine.qn("asa2", "SetOutputParameterValue"), attrib=out_attrs)
+
+        op_el = etree.SubElement(out_el, engine.qn("asa2", "SetOutputParameterValue.OutputParammeter"))
+        out_arg = etree.SubElement(
+            op_el,
+            engine.qn("wf", "OutArgument"),
+            attrib={engine.qn("x", "TypeArguments"): clr_type},
+        )
+        out_arg.text = f"[{parameter_name}]"
+
+        val_el = etree.SubElement(out_el, engine.qn("asa2", "SetOutputParameterValue.Value"))
+        in_arg = etree.SubElement(
+            val_el,
+            engine.qn("wf", "InArgument"),
+            attrib={engine.qn("x", "TypeArguments"): clr_type},
+        )
+        s_val = str(value_expr).strip()
+        in_arg.text = s_val if (s_val.startswith("[") and s_val.endswith("]")) else f"[{s_val}]"
+
+        if target_container is not None:
+            target_container.append(out_el)
+            return {
+                "reference_id": None,
+                "parameter_name": parameter_name,
+                "value_expr": value_expr,
+            }
+
+        ref_id = engine.next_reference_id()
+        step_vs_id = engine.next_viewstate_idref("FlowStep")
+        flow_step = etree.Element(
+            engine.qn("wf", "FlowStep"),
+            attrib={
+                engine.qn("x", "Name"): ref_id,
+                engine.qn("sap2010", "WorkflowViewState.IdRef"): step_vs_id,
+            },
+        )
+        flow_step.append(out_el)
+
+        x_pos, y_pos = engine.compute_next_shape_location()
+        linked_from = engine.attach_node_to_flowchart(
+            new_node=flow_step,
+            new_ref_id=ref_id,
+            parent_ref_id=parent_node_id,
+        )
+        engine.register_view_state(
+            id_ref=step_vs_id,
+            x=x_pos,
+            y=y_pos,
+            width=200.0,
+            height=52.0,
+        )
+
+        return {
+            "reference_id": ref_id,
+            "linked_from_reference_id": linked_from or "Flowchart.StartNode",
+            "parameter_name": parameter_name,
+            "value_expr": value_expr,
+            "view_location": f"{x_pos},{y_pos}",
+        }
+
+    @classmethod
+    def add_set_mark_point(
+        cls,
+        engine: FlowchartEngine,
+        point_number: str,
+        mark_name: str,
+        parent_node_id: Optional[str] = None,
+        target_container: Optional[etree._Element] = None,
+    ) -> dict:
+        """Tạo Activity SetMarkPointActivity chuẩn Native SAC."""
+        point_number = point_number.strip()
+        mark_name = mark_name.strip()
+        act_id = engine.next_activity_id()
+
+        smp_attrs = {
+            "ActivityId": act_id,
+            "DisplayName": f"Mark {point_number}->{mark_name}",
+            "Geometry": "[Geometry]",
+            "MarkName": mark_name,
+            "PointNumber": point_number,
+            "ShowErrors": "True",
+            "SubassemblyErrorCenter": "[SubassemblyErrorCenter]",
+            "SubassemblyRunMode": "[SubassemblyRunMode]",
+            engine.qn("sap", "VirtualizedContainerService.HintSize"): "200,22.4",
+        }
+
+        smp_el = etree.Element(engine.qn("asa2", "SetMarkPointActivity"), attrib=smp_attrs)
+
+        if target_container is not None:
+            target_container.append(smp_el)
+            return {
+                "reference_id": None,
+                "point_number": point_number,
+                "mark_name": mark_name,
+            }
+
+        ref_id = engine.next_reference_id()
+        step_vs_id = engine.next_viewstate_idref("FlowStep")
+        flow_step = etree.Element(
+            engine.qn("wf", "FlowStep"),
+            attrib={
+                engine.qn("x", "Name"): ref_id,
+                engine.qn("sap2010", "WorkflowViewState.IdRef"): step_vs_id,
+            },
+        )
+        flow_step.append(smp_el)
+
+        x_pos, y_pos = engine.compute_next_shape_location()
+        linked_from = engine.attach_node_to_flowchart(
+            new_node=flow_step,
+            new_ref_id=ref_id,
+            parent_ref_id=parent_node_id,
+        )
+        engine.register_view_state(
+            id_ref=step_vs_id,
+            x=x_pos,
+            y=y_pos,
+            width=200.0,
+            height=52.0,
+        )
+
+        return {
+            "reference_id": ref_id,
+            "linked_from_reference_id": linked_from or "Flowchart.StartNode",
+            "point_number": point_number,
+            "mark_name": mark_name,
+            "view_location": f"{x_pos},{y_pos}",
         }
 
     @classmethod

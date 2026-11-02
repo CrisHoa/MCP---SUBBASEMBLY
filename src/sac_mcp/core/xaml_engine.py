@@ -84,6 +84,34 @@ class FlowchartEngine:
             raise ValueError("Không tìm thấy phần tử <Flowchart> trong file XAML.")
         return nodes[0]
 
+    def add_flowchart_variable(
+        self,
+        name: str,
+        type_arguments: str = "x:Double",
+        default_expr: Optional[str] = None,
+    ) -> None:
+        """Đăng ký một biến trong <Flowchart.Variables> chuẩn Native SAC."""
+        flowchart = self.get_flowchart_element()
+        vars_elements = flowchart.xpath("./*[local-name()='Flowchart.Variables']")
+        if not vars_elements:
+            vars_el = etree.Element(self.qn("wf", "Flowchart.Variables"))
+            flowchart.insert(0, vars_el)
+        else:
+            vars_el = vars_elements[0]
+
+        existing = vars_el.xpath(f"./*[local-name()='Variable' and @Name='{name}']")
+        if existing:
+            return
+
+        var_attrib = {
+            self.qn("x", "TypeArguments"): type_arguments,
+            "Name": name,
+        }
+        if default_expr is not None:
+            var_attrib["Default"] = default_expr
+
+        etree.SubElement(vars_el, self.qn("wf", "Variable"), attrib=var_attrib)
+
     def get_view_state_manager(self) -> Optional[etree._Element]:
         nodes = self.root.xpath("//*[local-name()='ViewStateManager']")
         return nodes[0] if nodes else None

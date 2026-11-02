@@ -81,7 +81,8 @@ class RoundDaylightType(str, Enum):
 
 class ReportMessageType(str, Enum):
     """Mức độ cảnh báo của khối Report Message trong Civil 3D Event Viewer."""
-    INFORMATION = "Information"
+    INFORMATIONAL = "Informational"
+    INFORMATION = "Informational"  # Alias
     WARNING = "Warning"
     ERROR = "Error"
 
