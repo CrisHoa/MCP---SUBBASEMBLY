@@ -35,3 +35,6 @@ temp_test.pkt
 
 # Large reference archives (keep split modular pkt in examples/ and Bo_7_Subassembly)
 # Note: Keep SACVisualInfra.pkt if user wants, but track its split modules
+
+decompiled_visual/
+
