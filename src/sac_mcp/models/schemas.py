@@ -162,3 +162,16 @@ class MutationResult(BaseModel):
     message: str
     created_reference_ids: List[str] = Field(default_factory=list)
     details: Dict[str, Any] = Field(default_factory=dict)
+    warnings: List[str] = Field(default_factory=list)
+    backup_path: Optional[str] = None
+
+
+class ErrorResult(BaseModel):
+    """Kết quả lỗi có cấu trúc trả về cho MCP client (thay cho traceback)."""
+    success: bool = False
+    action: str
+    pkt_path: Optional[str] = None
+    error_type: str
+    message: str
+    hint: Optional[str] = None
+    issues: List[Dict[str, Any]] = Field(default_factory=list)

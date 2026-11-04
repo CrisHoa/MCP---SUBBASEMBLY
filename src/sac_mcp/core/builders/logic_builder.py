@@ -100,35 +100,39 @@ class LogicBuilder:
             }
 
         # Trường hợp 2: Có biểu thức điều kiện (condition_expr) -> Tạo <FlowDecision> trước,
-        # nhánh True trỏ sang khối ReportMessage
-        # Vì msg_step chưa gắn vào cây XML của engine, lấy ID tuần tự cho Decision và ReportMessage:
+        # nhánh True trỏ sang khối ReportMessage. Luồng phía sau được nối tiếp vào CẢ HAI:
+        #   - FlowDecision.False (điều kiện sai -> đi tiếp bình thường)
+        #   - ReportMessage.Next (điều kiện đúng -> báo lỗi rồi đi tiếp)
+        flowchart = engine.get_flowchart_element()
         dec_ref_id = msg_ref_id
-        dec_idx = int(dec_ref_id.replace("__ReferenceID", ""))
-        msg_ref_id = f"__ReferenceID{dec_idx + 1}"
-        msg_step.set(engine.qn("x", "Name"), msg_ref_id)
-
         dec_vs_id = engine.next_viewstate_idref("FlowDecision")
+        cond = condition_expr.strip()
+        cond_attr = cond if cond.startswith("[") else f"[{cond}]"
 
         decision_el = etree.Element(
             engine.qn("wf", "FlowDecision"),
             attrib={
                 engine.qn("x", "Name"): dec_ref_id,
-                "Condition": condition_expr.strip(),
-                "DisplayName": f"If ({condition_expr.strip()})",
+                "Condition": cond_attr,
+                "DisplayName": f"If ({cond})",
                 engine.qn("sap2010", "WorkflowViewState.IdRef"): dec_vs_id,
             },
         )
-        true_branch = etree.SubElement(decision_el, engine.qn("wf", "FlowDecision.True"))
-        xref_true = etree.SubElement(true_branch, engine.qn("x", "Reference"))
-        xref_true.text = msg_ref_id
+        flowchart.append(decision_el)
 
-        # Gắn FlowDecision vào luồng chính và thêm msg_step vào Flowchart
+        msg_ref_id = engine.next_reference_id()
+        msg_step.set(engine.qn("x", "Name"), msg_ref_id)
+        msg_step.set(engine.qn("sap2010", "WorkflowViewState.IdRef"), engine.next_viewstate_idref("FlowStep"))
+        msg_step_vs_id = msg_step.get(engine.qn("sap2010", "WorkflowViewState.IdRef"))
+        flowchart.append(msg_step)
+        engine.set_slot_reference(decision_el, "True", msg_ref_id)
+
         linked_from = engine.attach_node_to_flowchart(
             new_node=decision_el,
             new_ref_id=dec_ref_id,
             parent_ref_id=parent_node_id,
+            exits=[(decision_el, "False"), (msg_step, "Next")],
         )
-        engine.get_flowchart_element().append(msg_step)
 
         # Đặt tọa độ cho Decision ở luồng chính (X, Y) và ReportMessage lệch sang nhánh phải (X + 260, Y)
         engine.register_view_state(

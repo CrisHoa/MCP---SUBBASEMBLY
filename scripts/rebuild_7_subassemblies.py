@@ -18,7 +18,7 @@ from lxml import etree
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-ROOT_DIR = Path(r"C:\Users\Admin\Desktop\MCP - SUBBASEMBLY")
+ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR / "src"))
 
 from sac_mcp.server import create_pkt_from_template, add_parameter
@@ -26,7 +26,9 @@ from sac_mcp.server import create_pkt_from_template, add_parameter
 SRC_VI_PKT = ROOT_DIR / "examples" / "Sub Assembly" / "SACVisualInfra.pkt"
 SRC_SUB_DIR = ROOT_DIR / "examples" / "Sub Assembly"
 OUTPUT_DIR = ROOT_DIR / "examples" / "Sub Assembly" / "Bo_7_Subassembly_Chuan"
-PHUYEN_EXPORT_DIR = Path(r"C:\Users\Admin\Desktop\SUB PHU YEN\Bo_7_Subassembly")
+from sac_mcp.paths import get_output_dir
+
+PHUYEN_EXPORT_DIR = get_output_dir() / "Bo_7_Subassembly"
 
 SUB_SPECS = [
     {

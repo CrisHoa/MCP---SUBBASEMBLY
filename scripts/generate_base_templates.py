@@ -25,7 +25,7 @@ def main() -> None:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     print("1. Đang khởi tạo Base Templates (base_2025.pkt, base_2026.pkt, base_2027.pkt)...")
-    ensure_default_templates_exist()
+    ensure_default_templates_exist(overwrite=True)
 
     examples_dir = ROOT_DIR / "examples"
     examples_dir.mkdir(parents=True, exist_ok=True)

@@ -1,19 +1,24 @@
 """
 SAC MCP Server (sac-mcp-server)
 Model Context Protocol Server chuyên dụng cho Autodesk Civil 3D Subassembly Composer (2025 - 2027).
-Cung cấp 5 công cụ lõi:
-  1. inspect_pkt
-  2. create_pkt_from_template
-  3. add_parameter
-  4. add_point_and_link
-  5. add_report_message
+
+Nhóm công cụ (15 tool):
+  - Đọc / tra cứu: inspect_pkt, validate_pkt_native, get_sac_reference_and_formulas,
+    list_examples_and_split_catalog
+  - Tạo mới: create_pkt_from_template, generate_assembly_recipe
+  - Sửa file: add_parameter, add_point_and_link, add_link, add_fillet_arc, add_loop_geometry,
+    add_intersection_point, add_strip_surface, add_shape, add_report_message
 """
 
 from __future__ import annotations
 
+import functools
 import json
+import zipfile
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Callable, List, Literal, Optional, Tuple
+
+from lxml import etree
 
 try:
     from mcp.server.mcpserver import MCPServer as _MCPServerClass
@@ -28,12 +33,13 @@ from sac_mcp.core.knowledge_base import (
     SAC_TOOLBOX_CATALOG,
     build_superelevation_slope_expression,
 )
-from sac_mcp.core.opc_package import PktPackage
+from sac_mcp.core.opc_package import PktPackage, PktValidationError
 from sac_mcp.core.recipes import create_highway_lane_assembly, create_urban_road_assembly
 from sac_mcp.core.version_manager import VersionManager
 from sac_mcp.core.xaml_engine import FlowchartEngine
 from sac_mcp.models.schemas import (
     CivilVersion,
+    ErrorResult,
     InspectPktResult,
     MutationResult,
     ParameterCategory,
@@ -46,15 +52,94 @@ mcp = _MCPServerClass(
     "sac-mcp-server",
     instructions=(
         "MCP Server chuyên thiết kế, giải phẫu và tự động hóa file Subassembly (.pkt) "
-        "cho Autodesk Civil 3D phiên bản 2025, 2026, 2027."
+        "cho Autodesk Civil 3D phiên bản 2025, 2026, 2027. "
+        "Mọi tool sửa file đều kiểm định Tầng 1+2 trước khi ghi; nếu lỗi, file gốc giữ nguyên "
+        "và kết quả trả về success=false. Bản sao lưu trước mỗi lần sửa nằm ở '<tên>.pkt.bak'. "
+        "parent_node_id nhận '__ReferenceIDn' (FlowStep) hoặc '__ReferenceIDn:True' / ':False' (FlowDecision); "
+        "bỏ trống để nối vào cuối luồng."
     ),
 )
+
+
+def _error_json(action: str, pkt_path: Optional[str], exc: Exception) -> str:
+    """Chuyển exception thành JSON lỗi có cấu trúc để LLM đọc và tự sửa tham số."""
+    hint: Optional[str] = None
+    issues: list[dict] = []
+    if isinstance(exc, PktValidationError):
+        hint = "Kiểm tra lại biểu thức / tên đối tượng vừa truyền vào. File gốc không bị thay đổi."
+        issues = [
+            {"severity": i.severity, "category": i.category, "message": i.message, "location": i.location}
+            for i in exc.issues
+        ]
+    elif isinstance(exc, FileNotFoundError):
+        hint = "Kiểm tra lại đường dẫn (nên dùng đường dẫn tuyệt đối)."
+    elif isinstance(exc, zipfile.BadZipFile):
+        hint = "File không phải gói .pkt (ZIP/OPC) hợp lệ."
+    elif isinstance(exc, etree.XMLSyntaxError):
+        hint = "Nội dung XML/XAML trong gói .pkt bị hỏng."
+    res = ErrorResult(
+        action=action,
+        pkt_path=pkt_path,
+        error_type=type(exc).__name__,
+        message=str(exc),
+        hint=hint,
+        issues=issues,
+    )
+    return json.dumps(res.model_dump(), ensure_ascii=False, indent=2)
+
+
+def _safe_tool(action: str):
+    """Decorator: bắt mọi exception của tool đọc/tạo mới và trả JSON lỗi có cấu trúc."""
+
+    def deco(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except Exception as exc:
+                path = kwargs.get("pkt_path") or kwargs.get("output_path") or (args[0] if args else None)
+                return _error_json(action, str(path) if path is not None else None, exc)
+
+        return wrapper
+
+    return deco
+
+
+MutationFn = Callable[[PktPackage, FlowchartEngine], Tuple[dict, str, List[Optional[str]]]]
+
+
+def _mutate_pkt(action: str, pkt_path: str, fn: MutationFn) -> str:
+    """
+    Khung chung cho mọi tool sửa file .pkt:
+    mở gói -> sửa XAML -> kiểm định Tầng 1+2 -> sao lưu .bak -> ghi nguyên tử -> trả JSON.
+    `fn(pkg, engine)` trả về (details, message, created_reference_ids).
+    """
+    try:
+        pkg = PktPackage.open(pkt_path)
+        engine = FlowchartEngine(pkg.get_xaml_text())
+        details, message, ref_ids = fn(pkg, engine)
+        pkg.set_xaml_text(engine.to_xaml_string())
+        pkg.save(backup=True, validate=True)
+        res = MutationResult(
+            success=True,
+            pkt_path=str(pkg.pkt_path),
+            action=action,
+            message=message,
+            created_reference_ids=[r for r in ref_ids if r],
+            details=details,
+            warnings=engine.warnings + pkg.warnings,
+            backup_path=str(pkg.last_backup_path) if pkg.last_backup_path else None,
+        )
+        return json.dumps(res.model_dump(), ensure_ascii=False, indent=2)
+    except Exception as exc:
+        return _error_json(action, pkt_path, exc)
 
 
 # ============================================================================
 # TOOL 1: inspect_pkt
 # ============================================================================
 @mcp.tool()
+@_safe_tool("inspect_pkt")
 def inspect_pkt(
     pkt_path: str,
     include_raw_xaml: bool = False,
@@ -112,6 +197,7 @@ def inspect_pkt(
 # TOOL 2: create_pkt_from_template
 # ============================================================================
 @mcp.tool()
+@_safe_tool("create_pkt_from_template")
 def create_pkt_from_template(
     output_path: str,
     subassembly_name: str,
@@ -158,6 +244,8 @@ def create_pkt_from_template(
             "dotnet_target": spec.dotnet_target,
             "opc_files": pkg.list_opc_files(),
         },
+        warnings=pkg.warnings,
+        backup_path=str(pkg.last_backup_path) if pkg.last_backup_path else None,
     )
     return json.dumps(res.model_dump(), ensure_ascii=False, indent=2)
 
@@ -204,39 +292,28 @@ def add_parameter(
         display_name: Tên hiển thị trong hộp thoại Properties của Civil 3D.
         description: Mô tả chi tiết ý nghĩa tham số.
     """
-    pkg = PktPackage.open(pkt_path)
-    engine = FlowchartEngine(pkg.get_xaml_text())
-
-    info = ParameterBuilder.add_parameter(
-        engine=engine,
-        name=name,
-        category=ParameterCategory(param_category),
-        data_type=ParameterDataType(data_type),
-        default_value=default_value,
-        display_name=display_name,
-        description=description,
-    )
-
-    pkg.set_xaml_text(engine.to_xaml_string())
-    if param_category == "Input":
-        pkg.sync_parameter_to_atc(
-            name=info["parameter_name"],
-            data_type=data_type,
+    def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        info = ParameterBuilder.add_parameter(
+            engine=engine,
+            name=name,
+            category=ParameterCategory(param_category),
+            data_type=ParameterDataType(data_type),
             default_value=default_value,
-            display_name=info["display_name"],
+            display_name=display_name,
             description=description,
         )
-    pkg.save()
+        if param_category == "Input":
+            pkg.sync_parameter_to_atc(
+                name=info["parameter_name"],
+                data_type=data_type,
+                default_value=default_value,
+                display_name=info["display_name"],
+                description=description,
+            )
+        msg = f"Đã thêm {param_category} Parameter '{info['parameter_name']}' ({data_type} = {default_value})."
+        return info, msg, []
 
-    res = MutationResult(
-        success=True,
-        pkt_path=str(pkg.pkt_path),
-        action="add_parameter",
-        message=f"Đã thêm {param_category} Parameter '{info['parameter_name']}' ({data_type} = {default_value}).",
-        created_reference_ids=[],
-        details=info,
-    )
-    return json.dumps(res.model_dump(), ensure_ascii=False, indent=2)
+    return _mutate_pkt("add_parameter", pkt_path, _apply)
 
 
 # ============================================================================
@@ -286,9 +363,6 @@ def add_point_and_link(
                                     với biến độ dốc mặc định lấy từ param_1_expr (VD: 'LaneSlope').
         parent_node_id: (Tùy chọn) __ReferenceID của node cha. Nếu bỏ trống sẽ tự nối vào cuối Flowchart.
     """
-    pkg = PktPackage.open(pkt_path)
-    engine = FlowchartEngine(pkg.get_xaml_text())
-
     actual_param_1 = param_1_expr
     if use_superelevation_formula and point_type in (
         "Slope_DeltaX",
@@ -298,38 +372,30 @@ def add_point_and_link(
         fallback_var = param_1_expr if param_1_expr and param_1_expr != "0.0" else "LaneSlope"
         actual_param_1 = build_superelevation_slope_expression(fallback_slope_param=fallback_var)
 
-    info = GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code=point_code,
-        from_point=from_point,
-        point_type=PointGeometryType(point_type),
-        param_1_expr=actual_param_1,
-        param_2_expr=param_2_expr,
-        point_codes_str=point_codes_str,
-        add_link=add_link,
-        link_name=link_name,
-        link_codes_str=link_codes_str,
-        is_auxiliary=is_auxiliary,
-        parent_node_id=parent_node_id,
-    )
-
-    pkg.set_xaml_text(engine.to_xaml_string())
-    pkg.save()
-
-    kind_str = "Auxiliary Point" if is_auxiliary else "Point"
-    res = MutationResult(
-        success=True,
-        pkt_path=str(pkg.pkt_path),
-        action="add_point_and_link",
-        message=(
+    def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        info = GeometryBuilder.add_point_and_link(
+            engine=engine,
+            point_code=point_code,
+            from_point=from_point,
+            point_type=PointGeometryType(point_type),
+            param_1_expr=actual_param_1,
+            param_2_expr=param_2_expr,
+            point_codes_str=point_codes_str,
+            add_link=add_link,
+            link_name=link_name,
+            link_codes_str=link_codes_str,
+            is_auxiliary=is_auxiliary,
+            parent_node_id=parent_node_id,
+        )
+        kind_str = "Auxiliary Point" if is_auxiliary else "Point"
+        msg = (
             f"Đã thêm {kind_str} '{point_code}' (từ {from_point}, kiểu {point_type})"
             + (f" kèm Link '{link_name}'" if add_link else "")
             + f" tại node {info['reference_id']}."
-        ),
-        created_reference_ids=[info["reference_id"]],
-        details=info,
-    )
-    return json.dumps(res.model_dump(), ensure_ascii=False, indent=2)
+        )
+        return info, msg, [info["reference_id"]]
+
+    return _mutate_pkt("add_point_and_link", pkt_path, _apply)
 
 
 # ============================================================================
@@ -360,32 +426,21 @@ def add_link(
         is_auxiliary: True nếu là Link phụ trợ (AL).
         parent_node_id: (Tùy chọn) __ReferenceID của node cha.
     """
-    pkg = PktPackage.open(pkt_path)
-    engine = FlowchartEngine(pkg.get_xaml_text())
+    def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        info = GeometryBuilder.add_link(
+            engine=engine,
+            link_name=link_name,
+            start_point=start_point,
+            end_point=end_point,
+            link_codes_str=link_codes_str,
+            apply_aor=apply_aor,
+            is_auxiliary=is_auxiliary,
+            parent_node_id=parent_node_id,
+        )
+        msg = f"Đã thêm {'AuxLink' if is_auxiliary else 'Link'} '{link_name}' nối từ {start_point} đến {end_point}."
+        return info, msg, [info["reference_id"]]
 
-    info = GeometryBuilder.add_link(
-        engine=engine,
-        link_name=link_name,
-        start_point=start_point,
-        end_point=end_point,
-        link_codes_str=link_codes_str,
-        apply_aor=apply_aor,
-        is_auxiliary=is_auxiliary,
-        parent_node_id=parent_node_id,
-    )
-
-    pkg.set_xaml_text(engine.to_xaml_string())
-    pkg.save()
-
-    res = MutationResult(
-        success=True,
-        pkt_path=str(pkg.pkt_path),
-        action="add_link",
-        message=f"Đã thêm {'AuxLink' if is_auxiliary else 'Link'} '{link_name}' nối từ {start_point} đến {end_point}.",
-        created_reference_ids=[info["reference_id"]],
-        details=info,
-    )
-    return json.dumps(res.model_dump(), ensure_ascii=False, indent=2)
+    return _mutate_pkt("add_link", pkt_path, _apply)
 
 
 # ============================================================================
@@ -416,32 +471,21 @@ def add_fillet_arc(
         link_codes_str: Chuỗi Code gán cho đường cong (VD: '\"Top\", \"Link_Bo DPC\"').
         parent_node_id: (Tùy chọn) __ReferenceID của node cha.
     """
-    pkg = PktPackage.open(pkt_path)
-    engine = FlowchartEngine(pkg.get_xaml_text())
+    def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        info = GeometryBuilder.add_fillet_arc(
+            engine=engine,
+            link_number=link_number,
+            first_link=first_link,
+            second_link=second_link,
+            round_radius=round_radius,
+            end_point_name=end_point_name,
+            link_codes_str=link_codes_str,
+            parent_node_id=parent_node_id,
+        )
+        msg = f"Đã thêm cung bo cong Fillet Arc '{link_number}' (R={round_radius}m) tại node {info['reference_id']}."
+        return info, msg, [info["reference_id"]]
 
-    info = GeometryBuilder.add_fillet_arc(
-        engine=engine,
-        link_number=link_number,
-        first_link=first_link,
-        second_link=second_link,
-        round_radius=round_radius,
-        end_point_name=end_point_name,
-        link_codes_str=link_codes_str,
-        parent_node_id=parent_node_id,
-    )
-
-    pkg.set_xaml_text(engine.to_xaml_string())
-    pkg.save()
-
-    res = MutationResult(
-        success=True,
-        pkt_path=str(pkg.pkt_path),
-        action="add_fillet_arc",
-        message=f"Đã thêm cung bo cong Fillet Arc '{link_number}' (R={round_radius}m) tại node {info['reference_id']}.",
-        created_reference_ids=[info["reference_id"]],
-        details=info,
-    )
-    return json.dumps(res.model_dump(), ensure_ascii=False, indent=2)
+    return _mutate_pkt("add_fillet_arc", pkt_path, _apply)
 
 
 @mcp.tool()
@@ -463,29 +507,21 @@ def add_loop_geometry(
         repetition_count: Số lần lặp tối đa (mặc định 10).
         parent_node_id: (Tùy chọn) __ReferenceID của node cha.
     """
-    pkg = PktPackage.open(pkt_path)
-    engine = FlowchartEngine(pkg.get_xaml_text())
+    def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        info = GeometryBuilder.add_loop_geometry(
+            engine=engine,
+            loop_code=loop_code,
+            links=links,
+            repetition_count=repetition_count,
+            parent_node_id=parent_node_id,
+        )
+        msg = (
+            f"Đã thêm vòng lặp CreateLoop '{loop_code}' (Links={links}, max={repetition_count}) "
+            f"tại node {info['reference_id']}."
+        )
+        return info, msg, [info["reference_id"]]
 
-    info = GeometryBuilder.add_loop_geometry(
-        engine=engine,
-        loop_code=loop_code,
-        links=links,
-        repetition_count=repetition_count,
-        parent_node_id=parent_node_id,
-    )
-
-    pkg.set_xaml_text(engine.to_xaml_string())
-    pkg.save()
-
-    res = MutationResult(
-        success=True,
-        pkt_path=str(pkg.pkt_path),
-        action="add_loop_geometry",
-        message=f"Đã thêm vòng lặp CreateLoop '{loop_code}' (Links={links}, max={repetition_count}) tại node {info['reference_id']}.",
-        created_reference_ids=[info["reference_id"]],
-        details=info,
-    )
-    return json.dumps(res.model_dump(), ensure_ascii=False, indent=2)
+    return _mutate_pkt("add_loop_geometry", pkt_path, _apply)
 
 
 @mcp.tool()
@@ -511,32 +547,21 @@ def add_intersection_point(
         point_codes_str: (Tùy chọn) Chuỗi Code cho Point trong Civil 3D.
         parent_node_id: (Tùy chọn) __ReferenceID của node cha.
     """
-    pkg = PktPackage.open(pkt_path)
-    engine = FlowchartEngine(pkg.get_xaml_text())
+    def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        info = GeometryBuilder.add_intersection_point(
+            engine=engine,
+            point_code=point_code,
+            link1=link1,
+            link2=link2,
+            is_auxiliary=is_auxiliary,
+            point_codes_str=point_codes_str,
+            parent_node_id=parent_node_id,
+        )
+        kind = "AuxIntersection (AP)" if is_auxiliary else "LinkIntersection (P)"
+        msg = f"Đã thêm điểm giao cắt {kind} '{point_code}' giữa ({link1} x {link2}) tại node {info['reference_id']}."
+        return info, msg, [info["reference_id"]]
 
-    info = GeometryBuilder.add_intersection_point(
-        engine=engine,
-        point_code=point_code,
-        link1=link1,
-        link2=link2,
-        is_auxiliary=is_auxiliary,
-        point_codes_str=point_codes_str,
-        parent_node_id=parent_node_id,
-    )
-
-    pkg.set_xaml_text(engine.to_xaml_string())
-    pkg.save()
-
-    kind = "AuxIntersection (AP)" if is_auxiliary else "LinkIntersection (P)"
-    res = MutationResult(
-        success=True,
-        pkt_path=str(pkg.pkt_path),
-        action="add_intersection_point",
-        message=f"Đã thêm điểm giao cắt {kind} '{point_code}' giữa ({link1} x {link2}) tại node {info['reference_id']}.",
-        created_reference_ids=[info["reference_id"]],
-        details=info,
-    )
-    return json.dumps(res.model_dump(), ensure_ascii=False, indent=2)
+    return _mutate_pkt("add_intersection_point", pkt_path, _apply)
 
 
 @mcp.tool()
@@ -564,32 +589,24 @@ def add_strip_surface(
         link_codes_str: Chuỗi Link Code gán cho đáy lớp bóc hữu cơ (mặc định 'Link_VHC').
         parent_node_id: (Tùy chọn) __ReferenceID của node cha.
     """
-    pkg = PktPackage.open(pkt_path)
-    engine = FlowchartEngine(pkg.get_xaml_text())
+    def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        info = GeometryBuilder.add_strip_surface(
+            engine=engine,
+            display_name=display_name,
+            depth_expr=depth_expr,
+            end_point_name=end_point_name,
+            end_offset=end_offset,
+            end_offset_target=end_offset_target,
+            link_codes_str=link_codes_str,
+            parent_node_id=parent_node_id,
+        )
+        msg = (
+            f"Đã thêm khối bóc hữu cơ StripSurface '{display_name}' (Depth={depth_expr}) "
+            f"tại node {info['reference_id']}."
+        )
+        return info, msg, [info["reference_id"]]
 
-    info = GeometryBuilder.add_strip_surface(
-        engine=engine,
-        display_name=display_name,
-        depth_expr=depth_expr,
-        end_point_name=end_point_name,
-        end_offset=end_offset,
-        end_offset_target=end_offset_target,
-        link_codes_str=link_codes_str,
-        parent_node_id=parent_node_id,
-    )
-
-    pkg.set_xaml_text(engine.to_xaml_string())
-    pkg.save()
-
-    res = MutationResult(
-        success=True,
-        pkt_path=str(pkg.pkt_path),
-        action="add_strip_surface",
-        message=f"Đã thêm khối bóc hữu cơ StripSurface '{display_name}' (Depth={depth_expr}) tại node {info['reference_id']}.",
-        created_reference_ids=[info["reference_id"]],
-        details=info,
-    )
-    return json.dumps(res.model_dump(), ensure_ascii=False, indent=2)
+    return _mutate_pkt("add_strip_surface", pkt_path, _apply)
 
 
 @mcp.tool()
@@ -611,32 +628,22 @@ def add_shape(
         shape_codes_str: Chuỗi Code cho Shape trong Civil 3D (VD: '\"Pave1\"', '\"Base\"').
         parent_node_id: (Tùy chọn) __ReferenceID của node cha.
     """
-    pkg = PktPackage.open(pkt_path)
-    engine = FlowchartEngine(pkg.get_xaml_string() if hasattr(pkg, "get_xaml_string") else pkg.get_xaml_text())
+    def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        info = GeometryBuilder.add_shape(
+            engine=engine,
+            shape_code=shape_code,
+            link_names=link_names,
+            shape_codes_str=shape_codes_str,
+            parent_node_id=parent_node_id,
+        )
+        msg = f"Đã thêm Shape '{shape_code}' từ các Link {link_names} tại node {info['reference_id']}."
+        return info, msg, [info["reference_id"]]
 
-    info = GeometryBuilder.add_shape(
-        engine=engine,
-        shape_code=shape_code,
-        link_names=link_names,
-        shape_codes_str=shape_codes_str,
-        parent_node_id=parent_node_id,
-    )
-
-    pkg.set_xaml_text(engine.to_xaml_string())
-    pkg.save()
-
-    res = MutationResult(
-        success=True,
-        pkt_path=str(pkg.pkt_path),
-        action="add_shape",
-        message=f"Đã thêm Shape '{shape_code}' từ các Link {link_names} tại node {info['reference_id']}.",
-        created_reference_ids=[info["reference_id"]],
-        details=info,
-    )
-    return json.dumps(res.model_dump(), ensure_ascii=False, indent=2)
+    return _mutate_pkt("add_shape", pkt_path, _apply)
 
 
 @mcp.tool()
+@_safe_tool("get_sac_reference_and_formulas")
 def get_sac_reference_and_formulas(
     topic: Literal[
         "all",
@@ -700,36 +707,30 @@ def add_report_message(
                         công cụ sẽ tự động sinh một khối <FlowDecision> và nối nhánh True vào ReportMessage.
         parent_node_id: (Tùy chọn) __ReferenceID của node cha cần nối vào.
     """
-    pkg = PktPackage.open(pkt_path)
-    engine = FlowchartEngine(pkg.get_xaml_text())
-
-    info = LogicBuilder.add_report_message(
-        engine=engine,
-        message_expr=message_expr,
-        message_type=ReportMessageType(message_type),
-        condition_expr=condition_expr,
-        parent_node_id=parent_node_id,
-    )
-
-    pkg.set_xaml_text(engine.to_xaml_string())
-    pkg.save()
-
-    res = MutationResult(
-        success=True,
-        pkt_path=str(pkg.pkt_path),
-        action="add_report_message",
-        message=(
+    def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        info = LogicBuilder.add_report_message(
+            engine=engine,
+            message_expr=message_expr,
+            message_type=ReportMessageType(message_type),
+            condition_expr=condition_expr,
+            parent_node_id=parent_node_id,
+        )
+        msg = (
             f"Đã thêm khối ReportMessage ({message_type})"
-            + (f" kèm điều kiện Decision '{condition_expr}'" if condition_expr else "")
+            + (
+                f" kèm điều kiện Decision '{condition_expr}' (nhánh False và sau ReportMessage cùng đi tiếp)"
+                if condition_expr
+                else ""
+            )
             + "."
-        ),
-        created_reference_ids=info["created_reference_ids"],
-        details=info,
-    )
-    return json.dumps(res.model_dump(), ensure_ascii=False, indent=2)
+        )
+        return info, msg, info["created_reference_ids"]
+
+    return _mutate_pkt("add_report_message", pkt_path, _apply)
 
 
 @mcp.tool()
+@_safe_tool("generate_assembly_recipe")
 def generate_assembly_recipe(
     recipe_type: Literal["urban_road", "highway_lane"],
     output_path: str,
@@ -782,6 +783,7 @@ def generate_assembly_recipe(
 
 
 @mcp.tool()
+@_safe_tool("list_examples_and_split_catalog")
 def list_examples_and_split_catalog() -> str:
     """
     Liệt kê toàn bộ danh mục 14 file .pkt mẫu thực tế trong thư mục examples/
@@ -840,6 +842,7 @@ def list_examples_and_split_catalog() -> str:
 # TOOL: validate_pkt_native
 # ============================================================================
 @mcp.tool()
+@_safe_tool("validate_pkt_native")
 def validate_pkt_native(pkt_path: str) -> str:
     """Kiểm định toàn diện 3 tầng file Subassembly (.pkt) trước khi mở bằng Subassembly Composer hoặc import vào Civil 3D.
     Tầng 1: Cấu trúc OPC Package & XML Escaping
@@ -871,12 +874,18 @@ def validate_pkt_native(pkt_path: str) -> str:
     )
 
 
-def ensure_default_templates_exist() -> None:
-    """Đảm bảo 3 file base_2025.pkt, base_2026.pkt, base_2027.pkt luôn sẵn sàng trong thư mục templates/."""
+def ensure_default_templates_exist(overwrite: bool = False) -> None:
+    """
+    Sinh 3 file base_2025.pkt, base_2026.pkt, base_2027.pkt trong thư mục templates/.
+    Mặc định chỉ tạo file còn thiếu; truyền overwrite=True để sinh lại toàn bộ
+    (dùng bởi scripts/generate_base_templates.py). Server KHÔNG gọi hàm này khi khởi động.
+    """
     tpl_dir: Path = VersionManager.TEMPLATES_DIR
     tpl_dir.mkdir(parents=True, exist_ok=True)
     for ver in (CivilVersion.C3D_2025, CivilVersion.C3D_2026, CivilVersion.C3D_2027):
         tpl_path = VersionManager.get_template_path(ver)
+        if tpl_path.exists() and not overwrite:
+            continue
         PktPackage.create_from_template(
             output_path=tpl_path,
             subassembly_name=f"BaseTemplate_{ver.value}",
@@ -886,8 +895,7 @@ def ensure_default_templates_exist() -> None:
 
 
 def main() -> None:
-    """Entrypoint khởi chạy SAC MCP Server qua giao thức stdio."""
-    ensure_default_templates_exist()
+    """Entrypoint khởi chạy SAC MCP Server qua giao thức stdio (không ghi file nào khi khởi động)."""
     mcp.run()
 
 

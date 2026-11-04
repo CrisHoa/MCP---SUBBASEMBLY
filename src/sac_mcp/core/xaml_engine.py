@@ -44,6 +44,20 @@ DEFAULT_NS = {
 
 INTERNAL_SAC_PROPS = {"Geometry", "SubassemblyErrorCenter", "SubassemblyRunMode"}
 
+# Các loại node trong WF4 Flowchart và các nhánh (slot) nối tiếp của từng loại
+FLOW_NODE_TAGS = {"FlowStep", "FlowDecision", "FlowSwitch"}
+SLOT_PROPS: Dict[str, Tuple[str, ...]] = {
+    "FlowStep": ("Next",),
+    "FlowDecision": ("True", "False"),
+    "FlowSwitch": ("Default",),
+}
+_XREF_ATTR_RE = re.compile(r"^\{x:Reference\s+([^}\s]+)\s*\}$")
+
+
+def _local(el: etree._Element) -> str:
+    """Local name của element (bỏ namespace); trả '' cho comment / processing instruction."""
+    return etree.QName(el).localname if isinstance(el.tag, str) else ""
+
 
 class FlowchartEngine:
     """Engine phân tích và chỉnh sửa cây cú pháp WF4 XAML của Subassembly Composer."""
@@ -51,6 +65,7 @@ class FlowchartEngine:
     def __init__(self, xaml_text: str) -> None:
         self.parser = etree.XMLParser(remove_blank_text=False, strip_cdata=False)
         self.root: etree._Element = etree.fromstring(xaml_text.encode("utf-8"), self.parser)
+        self.warnings: List[str] = []
         self.nsmap: Dict[str, str] = dict(DEFAULT_NS)
         for prefix, uri in (self.root.nsmap or {}).items():
             if prefix is None:
@@ -99,7 +114,7 @@ class FlowchartEngine:
         else:
             vars_el = vars_elements[0]
 
-        existing = vars_el.xpath(f"./*[local-name()='Variable' and @Name='{name}']")
+        existing = vars_el.xpath("./*[local-name()='Variable' and @Name=$n]", n=name)
         if existing:
             return
 
@@ -251,65 +266,267 @@ class FlowchartEngine:
     # ========================================================================
 
     def find_node_by_reference_id(self, ref_id: str) -> Optional[etree._Element]:
-        xpath_expr = f"//*[@*[local-name()='Name']='{ref_id}']"
-        matches = self.root.xpath(xpath_expr)
-        return matches[0] if matches else None
+        return self._node_index().get(ref_id.strip())
 
-    def find_tail_flow_step(self) -> Optional[etree._Element]:
+    # ------------------------------------------------------------------------
+    # Mô hình đồ thị Flowchart (hỗ trợ cả node lồng inline lẫn <x:Reference>)
+    # ------------------------------------------------------------------------
+
+    def _node_index(self) -> Dict[str, etree._Element]:
+        """Bảng {x:Name: element} cho mọi FlowStep / FlowDecision / FlowSwitch trong Flowchart."""
+        index: Dict[str, etree._Element] = {}
+        x_name = self.qn("x", "Name")
+        main_fc = self.get_flowchart_element()
+        for el in main_fc.iter(etree.Element):
+            if _local(el) in FLOW_NODE_TAGS:
+                # Bỏ qua node thuộc Flowchart con lồng bên trong (phạm vi tham chiếu riêng)
+                owner = next((a for a in el.iterancestors() if _local(a) == "Flowchart"), None)
+                if owner is not main_fc:
+                    continue
+                name = el.get(x_name)
+                if name:
+                    index[name] = el
+        return index
+
+    def _resolve_holder(
+        self, holder: etree._Element, index: Dict[str, etree._Element]
+    ) -> Optional[etree._Element]:
+        """Đọc node đích bên trong một property element (VD: <FlowStep.Next>)."""
+        for child in holder.iterchildren(etree.Element):
+            ln = _local(child)
+            if ln == "Reference":
+                return index.get((child.text or "").strip())
+            if ln in FLOW_NODE_TAGS:
+                return child
+            if ln == "Null":
+                return None
+        return None
+
+    def get_slot_target(
+        self, node: etree._Element, slot: str, index: Dict[str, etree._Element]
+    ) -> Optional[etree._Element]:
+        """Node đích của nhánh `slot` ('Next' / 'True' / 'False' / 'Default')."""
+        attr_val = node.get(slot)
+        if attr_val:
+            m = _XREF_ATTR_RE.match(attr_val.strip())
+            if m:
+                return index.get(m.group(1))
+        prop_name = f"{_local(node)}.{slot}"
+        for prop in node.iterchildren(etree.Element):
+            if _local(prop) == prop_name:
+                return self._resolve_holder(prop, index)
+        return None
+
+    def get_start_node(self, index: Dict[str, etree._Element]) -> Optional[etree._Element]:
         flowchart = self.get_flowchart_element()
-        flow_steps = flowchart.xpath(".//*[local-name()='FlowStep' and @*[local-name()='Name']]")
-        if not flow_steps:
-            return None
+        attr_val = flowchart.get("StartNode")
+        if attr_val:
+            m = _XREF_ATTR_RE.match(attr_val.strip())
+            if m:
+                return index.get(m.group(1))
+        for prop in flowchart.iterchildren(etree.Element):
+            if _local(prop) == "Flowchart.StartNode":
+                return self._resolve_holder(prop, index)
+        return None
 
-        for step in reversed(flow_steps):
-            next_nodes = step.xpath("./*[local-name()='FlowStep.Next']")
-            if not next_nodes:
-                return step
-        return flow_steps[-1]
+    def _successors(
+        self, node: etree._Element, index: Dict[str, etree._Element]
+    ) -> List[etree._Element]:
+        kind = _local(node)
+        result = [
+            t for slot in SLOT_PROPS.get(kind, ()) if (t := self.get_slot_target(node, slot, index)) is not None
+        ]
+        if kind == "FlowSwitch":
+            # Các nhánh Case nằm trực tiếp bên trong FlowSwitch (có x:Key)
+            for child in node.iterchildren(etree.Element):
+                ln = _local(child)
+                if ln == "Reference":
+                    t = index.get((child.text or "").strip())
+                    if t is not None:
+                        result.append(t)
+                elif ln in FLOW_NODE_TAGS:
+                    result.append(child)
+        return result
+
+    def reachable_nodes(self) -> List[etree._Element]:
+        """Danh sách node tới được từ StartNode (thứ tự BFS)."""
+        index = self._node_index()
+        start = self.get_start_node(index)
+        if start is None:
+            return []
+        seen = {id(start)}
+        order = [start]
+        i = 0
+        while i < len(order):
+            for nxt in self._successors(order[i], index):
+                if id(nxt) not in seen:
+                    seen.add(id(nxt))
+                    order.append(nxt)
+            i += 1
+        return order
+
+    def find_open_exits(self) -> List[Tuple[etree._Element, str]]:
+        """
+        Các "đầu ra mở" (chưa nối tiếp) của những node tới được từ StartNode:
+          - FlowStep chưa có Next
+          - FlowDecision thiếu nhánh True hoặc False
+        (FlowSwitch không tính: thiếu Default là hợp lệ.)
+        """
+        index = self._node_index()
+        exits: List[Tuple[etree._Element, str]] = []
+        for node in self.reachable_nodes():
+            kind = _local(node)
+            if kind == "FlowSwitch":
+                continue
+            for slot in SLOT_PROPS.get(kind, ()):
+                if self.get_slot_target(node, slot, index) is None:
+                    exits.append((node, slot))
+        return exits
+
+    def set_slot_reference(self, node: etree._Element, slot: str, target_ref_id: str) -> None:
+        """Gán nhánh `slot` của node trỏ tới `<x:Reference>target_ref_id</x:Reference>`."""
+        if slot in node.attrib:
+            del node.attrib[slot]
+        prop_name = f"{_local(node)}.{slot}"
+        for prop in list(node.iterchildren(etree.Element)):
+            if _local(prop) == prop_name:
+                node.remove(prop)
+        ns_uri = etree.QName(node).namespace
+        prop_el = etree.SubElement(node, f"{{{ns_uri}}}{prop_name}" if ns_uri else prop_name)
+        etree.SubElement(prop_el, self.qn("x", "Reference")).text = target_ref_id
+
+    def _set_start_reference(self, target_ref_id: str) -> None:
+        flowchart = self.get_flowchart_element()
+        if "StartNode" in flowchart.attrib:
+            del flowchart.attrib["StartNode"]
+        holders = [p for p in flowchart.iterchildren(etree.Element) if _local(p) == "Flowchart.StartNode"]
+        if holders:
+            sn = holders[0]
+            for child in list(sn):
+                sn.remove(child)
+        else:
+            sn = etree.SubElement(flowchart, self.qn("wf", "Flowchart.StartNode"))
+        etree.SubElement(sn, self.qn("x", "Reference")).text = target_ref_id
+
+    def _detach_slot_target(
+        self, node: etree._Element, slot: str, index: Dict[str, etree._Element]
+    ) -> Optional[str]:
+        """
+        Lấy tên node đang nối sau `node.slot`. Nếu node đó đang lồng inline bên trong,
+        chuyển nó ra cấp Flowchart (đặt x:Name nếu thiếu) để có thể tham chiếu bằng x:Reference.
+        """
+        target = self.get_slot_target(node, slot, index)
+        if target is None:
+            return None
+        x_name = self.qn("x", "Name")
+        name = target.get(x_name)
+        if not name:
+            name = self.next_reference_id()
+            target.set(x_name, name)
+        holder = target.getparent()
+        if holder is not None and holder.getparent() is node:
+            self.get_flowchart_element().append(target)
+        return name
+
+    def _default_exits(self, node: etree._Element) -> List[Tuple[etree._Element, str]]:
+        kind = _local(node)
+        if kind == "FlowSwitch":
+            return []
+        index = self._node_index()
+        return [(node, s) for s in SLOT_PROPS.get(kind, ()) if self.get_slot_target(node, s, index) is None]
 
     def attach_node_to_flowchart(
         self,
         new_node: etree._Element,
         new_ref_id: str,
         parent_ref_id: Optional[str] = None,
+        exits: Optional[List[Tuple[etree._Element, str]]] = None,
     ) -> Optional[str]:
+        """
+        Gắn node mới vào luồng Flowchart.
+
+        - parent_ref_id = None: nối vào MỌI đầu ra mở của luồng (tất cả nhánh hội tụ về node mới).
+          Nếu Flowchart rỗng thì node mới thành StartNode.
+        - parent_ref_id = '__ReferenceIDn' (FlowStep) hoặc '__ReferenceIDn:True' / ':False' (FlowDecision):
+          CHÈN node mới ngay sau nhánh đó; phần luồng phía sau được nối tiếp vào `exits` của node mới
+          (mặc định: Next của FlowStep, hoặc các nhánh còn trống của FlowDecision).
+
+        Trả về chuỗi mô tả node cha đã nối (None nếu node mới là StartNode).
+        """
         flowchart = self.get_flowchart_element()
-        parent_node: Optional[etree._Element] = None
+        if new_node.getparent() is None:
+            flowchart.append(new_node)
+        if exits is None:
+            exits = self._default_exits(new_node)
+
+        index = self._node_index()
 
         if parent_ref_id:
-            parent_node = self.find_node_by_reference_id(parent_ref_id)
-        else:
-            parent_node = self.find_tail_flow_step()
-
-        start_node_container = flowchart.xpath("./*[local-name()='Flowchart.StartNode']")
-        has_valid_start = False
-        if start_node_container:
-            null_children = start_node_container[0].xpath("./*[local-name()='Null']")
-            if not null_children and len(start_node_container[0]) > 0:
-                has_valid_start = True
-
-        flowchart.append(new_node)
-
-        if not has_valid_start or parent_node is None:
-            if not start_node_container:
-                sn = etree.SubElement(flowchart, self.qn("wf", "Flowchart.StartNode"))
+            parent_name, _, branch = parent_ref_id.strip().partition(":")
+            parent_name, branch = parent_name.strip(), branch.strip()
+            parent = index.get(parent_name)
+            if parent is None or parent is new_node:
+                raise ValueError(
+                    f"Không tìm thấy node cha '{parent_name}' trong Flowchart. "
+                    "Dùng inspect_pkt để xem danh sách reference_id hợp lệ."
+                )
+            kind = _local(parent)
+            if kind == "FlowStep":
+                if branch and branch != "Next":
+                    raise ValueError(f"Node '{parent_name}' là FlowStep, chỉ có nhánh 'Next' (không có '{branch}').")
+                slot = "Next"
+            elif kind == "FlowDecision":
+                if branch:
+                    if branch not in ("True", "False"):
+                        raise ValueError(f"Nhánh '{branch}' không hợp lệ cho FlowDecision (chỉ 'True' hoặc 'False').")
+                    slot = branch
+                else:
+                    open_slots = [s for s in ("True", "False") if self.get_slot_target(parent, s, index) is None]
+                    if len(open_slots) != 1:
+                        raise ValueError(
+                            f"Node '{parent_name}' là FlowDecision: hãy chỉ rõ nhánh bằng "
+                            f"'{parent_name}:True' hoặc '{parent_name}:False'."
+                        )
+                    slot = open_slots[0]
             else:
-                sn = start_node_container[0]
-                for child in list(sn):
-                    sn.remove(child)
-            xref = etree.SubElement(sn, self.qn("x", "Reference"))
-            xref.text = new_ref_id
+                raise ValueError(f"Chưa hỗ trợ chèn sau node loại {kind} ('{parent_name}').")
+
+            old_target = self._detach_slot_target(parent, slot, index)
+            self.set_slot_reference(parent, slot, new_ref_id)
+            if old_target:
+                if not exits:
+                    self.warnings.append(
+                        f"Node '{new_ref_id}' không còn nhánh trống nên phần luồng sau "
+                        f"'{parent_name}.{slot}' (bắt đầu từ '{old_target}') đã bị tách khỏi luồng."
+                    )
+                for ex_node, ex_slot in exits:
+                    self.set_slot_reference(ex_node, ex_slot, old_target)
+            return parent_name if slot == "Next" else f"{parent_name}:{slot}"
+
+        start = self.get_start_node(index)
+        if start is None or start is new_node:
+            self._set_start_reference(new_ref_id)
             return None
 
-        parent_name = parent_node.get(self.qn("x", "Name"))
-        existing_next = parent_node.xpath("./*[local-name()='FlowStep.Next']")
-        for el in existing_next:
-            parent_node.remove(el)
-
-        next_el = etree.SubElement(parent_node, self.qn("wf", "FlowStep.Next"))
-        xref = etree.SubElement(next_el, self.qn("x", "Reference"))
-        xref.text = new_ref_id
-        return parent_name
+        open_exits = [(n, s) for n, s in self.find_open_exits() if n is not new_node]
+        if not open_exits:
+            raise ValueError(
+                "Flowchart không còn đầu ra mở nào để nối tiếp (luồng khép kín hoặc kết thúc bằng FlowSwitch). "
+                "Hãy truyền parent_node_id để chỉ định vị trí chèn."
+            )
+        x_name = self.qn("x", "Name")
+        labels = []
+        for ex_node, ex_slot in open_exits:
+            if not ex_node.get(x_name):
+                ex_node.set(x_name, self.next_reference_id())
+            self.set_slot_reference(ex_node, ex_slot, new_ref_id)
+            nm = ex_node.get(x_name)
+            labels.append(nm if ex_slot == "Next" else f"{nm}:{ex_slot}")
+        if len(open_exits) > 1:
+            self.warnings.append(
+                f"Luồng có {len(open_exits)} đầu ra mở ({', '.join(labels)}); tất cả đã được nối hội tụ về '{new_ref_id}'."
+            )
+        return ", ".join(labels)
 
     def create_sequence_step(
         self,

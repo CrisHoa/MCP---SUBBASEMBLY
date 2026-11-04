@@ -9,6 +9,7 @@ Hỗ trợ 100% cả 3 biến thể file .pkt:
 from __future__ import annotations
 
 import io
+import os
 from pathlib import Path
 import shutil
 import uuid
@@ -20,12 +21,25 @@ from sac_mcp.core.version_manager import VersionManager
 from sac_mcp.models.schemas import CivilVersion, ParameterInfo
 
 
+class PktValidationError(ValueError):
+    """Thay đổi bị từ chối vì file .pkt sau khi sửa không qua được kiểm định Tầng 1/2."""
+
+    def __init__(self, issues: list) -> None:
+        self.issues = issues
+        detail = "; ".join(i.message for i in issues[:5])
+        super().__init__(
+            f"Thay đổi bị huỷ, file gốc được giữ nguyên: kết quả không qua kiểm định ({len(issues)} lỗi). {detail}"
+        )
+
+
 class PktPackage:
     """Đại diện cho một gói file Subassembly (.pkt) trong bộ nhớ (RAM)."""
 
     def __init__(self, pkt_path: str | Path, files_map: Dict[str, bytes]) -> None:
         self.pkt_path = Path(pkt_path).resolve()
         self.files: Dict[str, bytes] = files_map
+        self.warnings: List[str] = []
+        self.last_backup_path: Optional[Path] = None
 
     @classmethod
     def open(cls, pkt_path: str | Path) -> "PktPackage":
@@ -69,7 +83,7 @@ class PktPackage:
                     description=description,
                     civil_version=civil_version,
                 )
-                pkg.save()
+                pkg.save(backup=True)
                 return pkg
 
         guid_hex = uuid.uuid4().hex
@@ -90,7 +104,7 @@ class PktPackage:
             f"{guid_hex}.cdmd": VersionManager.build_cdmd_xml().encode("utf-8"),
         }
         pkg = cls(out_path, files_map)
-        pkg.save()
+        pkg.save(backup=True)
         return pkg
 
     def list_opc_files(self) -> List[str]:
@@ -163,8 +177,8 @@ class PktPackage:
                         description=desc,
                     )
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            self.warnings.append(f"Không đọc được Params trong '{atc_name}': {exc}")
         return params
 
     def sync_parameter_to_atc(
@@ -178,12 +192,14 @@ class PktPackage:
         """Đồng bộ Input Parameter mới thêm vào mục <Params> của file <guid>.atc."""
         atc_name = self.find_atc_filename()
         if not atc_name:
+            self.warnings.append(f"Gói không có file .atc nên Parameter '{name}' chưa được đồng bộ sang Civil 3D.")
             return
         try:
             parser = etree.XMLParser(remove_blank_text=False)
             root = etree.fromstring(self.files[atc_name], parser)
             params_containers = root.xpath("//*[local-name()='Params']")
             if not params_containers:
+                self.warnings.append(f"File '{atc_name}' không có mục <Params>; Parameter '{name}' chưa được đồng bộ.")
                 return
             params_el = params_containers[0]
 
@@ -214,8 +230,8 @@ class PktPackage:
             self.files[atc_name] = etree.tostring(
                 root, encoding="utf-8", xml_declaration=True, pretty_print=True
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            self.warnings.append(f"Đồng bộ Parameter '{name}' sang '{atc_name}' thất bại: {exc}")
 
     def get_metadata(self) -> Dict[str, Any]:
         """Đọc thông tin SubassemblyName, Description, Version từ .atc/.cfg hoặc PacketSettings.xml."""
@@ -235,8 +251,8 @@ class PktPackage:
                 vn = cfg_root.xpath("//*[local-name()='VersionNumber']")
                 if vn and vn[0].text:
                     result["packet_version_tag"] = vn[0].text.strip()
-            except Exception:
-                pass
+            except Exception as exc:
+                self.warnings.append(f"Không đọc được VersionNumber trong '{cfg_name}': {exc}")
 
         atc_name = self.find_atc_filename()
         if atc_name:
@@ -260,8 +276,8 @@ class PktPackage:
                     result["subassembly_name"] = " | ".join(names)
                 if descs:
                     result["description"] = " | ".join(descs)
-            except Exception:
-                pass
+            except Exception as exc:
+                self.warnings.append(f"Không đọc được metadata trong '{atc_name}': {exc}")
 
         if "PacketSettings.xml" in self.files:
             raw_ps = self.files["PacketSettings.xml"].decode("utf-8-sig", errors="replace")
@@ -277,8 +293,8 @@ class PktPackage:
                     result["description"] = sd[0].text.strip()
                 if sv and sv[0].text:
                     result["packet_version_tag"] = sv[0].text.strip()
-            except Exception:
-                pass
+            except Exception as exc:
+                self.warnings.append(f"Không đọc được PacketSettings.xml: {exc}")
 
         return result
 
@@ -317,11 +333,24 @@ class PktPackage:
                 self.files[atc_name] = etree.tostring(
                     root, encoding="utf-8", xml_declaration=True, pretty_print=True
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                self.warnings.append(f"Cập nhật tên/mô tả trong '{atc_name}' thất bại: {exc}")
 
-    def save(self, target_path: Optional[str | Path] = None) -> Path:
-        """Đóng gói lại thành file .pkt chuẩn ZIP (DEFLATED)."""
+    def save(
+        self,
+        target_path: Optional[str | Path] = None,
+        *,
+        backup: bool = False,
+        validate: bool = False,
+    ) -> Path:
+        """
+        Đóng gói lại thành file .pkt chuẩn ZIP (DEFLATED) theo cách an toàn:
+          1. Ghi ra file tạm cùng thư mục.
+          2. (validate=True) Kiểm định Tầng 1 + 2 trên file tạm. Nếu phát sinh lỗi MỚI so với
+             file gốc -> xoá file tạm, giữ nguyên file gốc và raise PktValidationError.
+          3. (backup=True) Sao lưu file gốc thành '<tên>.pkt.bak'.
+          4. Thay thế nguyên tử (os.replace) -> không bao giờ để lại file .pkt ghi dở.
+        """
         out_path = Path(target_path).resolve() if target_path else self.pkt_path
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -330,6 +359,37 @@ class PktPackage:
             for member_name, data in self.files.items():
                 zf.writestr(member_name, data)
 
-        out_path.write_bytes(buf.getvalue())
+        tmp_path = out_path.with_name(f".{out_path.name}.{uuid.uuid4().hex[:8]}.tmp")
+        tmp_path.write_bytes(buf.getvalue())
+        self.last_backup_path = None
+        try:
+            if validate:
+                self._validate_before_commit(tmp_path, out_path)
+            if backup and out_path.exists():
+                bak_path = out_path.with_name(out_path.name + ".bak")
+                shutil.copy2(out_path, bak_path)
+                self.last_backup_path = bak_path
+            os.replace(tmp_path, out_path)
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink()
+
         self.pkt_path = out_path
         return out_path
+
+    @staticmethod
+    def _validate_before_commit(tmp_path: Path, out_path: Path) -> None:
+        from sac_mcp.core.validator import PktValidator
+
+        new_rep = PktValidator.validate_pkt(tmp_path, run_native_test=False)
+        if new_rep.is_valid:
+            return
+        baseline: set = set()
+        if out_path.exists():
+            old_rep = PktValidator.validate_pkt(out_path, run_native_test=False)
+            baseline = {(i.category, i.location) for i in old_rep.issues if i.severity == "ERROR"}
+        new_errors = [
+            i for i in new_rep.issues if i.severity == "ERROR" and (i.category, i.location) not in baseline
+        ]
+        if new_errors:
+            raise PktValidationError(new_errors)

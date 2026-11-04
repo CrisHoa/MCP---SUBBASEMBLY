@@ -15,9 +15,6 @@ import sys
 import tempfile
 import zipfile
 
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8")
-
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -295,6 +292,9 @@ try {{
 
 
 def main() -> None:
+    # Chỉ đổi encoding khi chạy CLI (không làm ở cấp module vì server MCP dùng stdout làm kênh JSON-RPC)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     if len(sys.argv) < 2:
         print("Sử dụng: python -m sac_mcp.core.validator <duong_dan_file.pkt>")
         sys.exit(1)

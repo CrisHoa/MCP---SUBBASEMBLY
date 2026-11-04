@@ -19,7 +19,7 @@ from lxml import etree
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-ROOT_DIR = Path(r"C:\Users\Admin\Desktop\MCP - SUBBASEMBLY")
+ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR / "src"))
 
 from sac_mcp.core.builders import GeometryBuilder, ParameterBuilder
@@ -477,8 +477,10 @@ def build_giaco_taluy_phuyen_pkt(output_pkt_path: str | Path) -> str:
 
 
 if __name__ == "__main__":
-    phuyen_out = Path(r"C:\Users\Admin\Desktop\SUB PHU YEN\GiaCo_MaiTaluy_PhuYen.pkt")
-    examples_out = Path(r"C:\Users\Admin\Desktop\MCP - SUBBASEMBLY\examples\GiaCo_MaiTaluy_PhuYen.pkt")
+    from sac_mcp.paths import get_output_dir
+
+    phuyen_out = get_output_dir() / "GiaCo_MaiTaluy_PhuYen.pkt"
+    examples_out = ROOT_DIR / "examples" / "GiaCo_MaiTaluy_PhuYen.pkt"
 
     build_giaco_taluy_phuyen_pkt(phuyen_out)
     build_giaco_taluy_phuyen_pkt(examples_out)

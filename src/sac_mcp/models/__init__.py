@@ -11,6 +11,7 @@ from .schemas import (
     FlowNodeInfo,
     InspectPktResult,
     MutationResult,
+    ErrorResult,
 )
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "FlowNodeInfo",
     "InspectPktResult",
     "MutationResult",
+    "ErrorResult",
 ]

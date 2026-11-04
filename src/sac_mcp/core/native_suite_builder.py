@@ -289,7 +289,7 @@ class NativeSuiteBuilder:
         engine.set_decision_branches(dec_cut_fill["element"], true_ref_id=dec_dap_co["decision_node_id"])
 
         # Nhánh Đắp có giật cơ: P2 -> P3 (mái tầng 1 hạ H_GiatCo_Dap) -> P4 (mặt cơ B_Co_Dap) -> P5 (mái 2 xuống EG)
-        GeometryBuilder.add_point_and_link(engine, "P3", "P2", PointGeometryType.SLOPE_DELTA_Y, "s_Dap", "-H_GiatCo_Dap", point_codes_str='"Dinh_Co_Dap"', add_link=True, link_name="L2", link_codes_str='"Daylight", "TaluyDap"')
+        GeometryBuilder.add_point_and_link(engine, "P3", "P2", PointGeometryType.SLOPE_DELTA_Y, "s_Dap", "-H_GiatCo_Dap", point_codes_str='"Dinh_Co_Dap"', add_link=True, link_name="L2", link_codes_str='"Daylight", "TaluyDap"', parent_node_id=f"{dec_dap_co['decision_node_id']}:True")
         GeometryBuilder.add_point_and_link(engine, "P4", "P3", PointGeometryType.SLOPE_DELTA_X, "i_Co_Dap", "B_Co_Dap", point_codes_str='"Mep_Co_Dap"', add_link=True, link_name="L3", link_codes_str='"Top", "MatCo"')
         GeometryBuilder.add_point_and_link(engine, "P5", "P4", PointGeometryType.SLOPE_TO_SURFACE, "s_Dap", "EG", point_codes_str='"Chan_Taluy_Dap"', add_link=True, link_name="L4", link_codes_str='"Daylight", "TaluyDap"')
 
