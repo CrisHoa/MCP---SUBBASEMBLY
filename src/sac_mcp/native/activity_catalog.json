@@ -1,0 +1,782 @@
+{
+  "source": "Subassembly.ActivityLibrary.dll",
+  "versions": {
+    "2024": "13.6.2151.0",
+    "2025": "13.7.1429.0",
+    "2026": "13.8.1704.0",
+    "2027": "13.9.628.0"
+  },
+  "activities": {
+    "AuxIntersection": {
+      "properties": [
+        "ActivityId",
+        "Arguments",
+        "CreationType",
+        "DisplayName",
+        "Geometry",
+        "Id",
+        "Index",
+        "IsCreatingAux",
+        "PointCodes",
+        "PointNumber",
+        "ShowErrors",
+        "Side",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ],
+      "required": [
+        "ActivityId",
+        "Geometry",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ]
+    },
+    "CreateAuxCurve": {
+      "properties": [
+        "ActivityId",
+        "Arguments",
+        "CreationType",
+        "DisplayName",
+        "EndPoint",
+        "Geometry",
+        "Id",
+        "IsCreatingAux",
+        "LinkCodes",
+        "LinkNumber",
+        "NoIncrements",
+        "ShowErrors",
+        "Side",
+        "StartPoint",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ],
+      "required": [
+        "ActivityId",
+        "EndPoint",
+        "Geometry",
+        "LinkNumber",
+        "NoIncrements",
+        "StartPoint",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ]
+    },
+    "CreateAuxLink": {
+      "properties": [
+        "ActivityId",
+        "ApplyAOR",
+        "DisplayName",
+        "EndPoint",
+        "Geometry",
+        "Id",
+        "IsCreatingAux",
+        "IsEnabled",
+        "LinkCodes",
+        "LinkNumber",
+        "ShowErrors",
+        "StartPoint",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ],
+      "required": [
+        "ActivityId",
+        "EndPoint",
+        "Geometry",
+        "LinkNumber",
+        "StartPoint",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ]
+    },
+    "CreateAuxPoint": {
+      "properties": [
+        "ActivityId",
+        "ApplyAOR",
+        "Arguments",
+        "AutoLink",
+        "AutoLinkCodes",
+        "AutoLinkGeometryName",
+        "DisplayName",
+        "FromPoint",
+        "Geometry",
+        "Id",
+        "IsCreatingAux",
+        "PointCodes",
+        "PointNumber",
+        "Positioning",
+        "ShowErrors",
+        "Side",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ],
+      "required": [
+        "ActivityId",
+        "Geometry",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ]
+    },
+    "CreateCurve": {
+      "properties": [
+        "ActivityId",
+        "Arguments",
+        "CreationType",
+        "DisplayName",
+        "EndPoint",
+        "Geometry",
+        "Id",
+        "IsCreatingAux",
+        "LinkCodes",
+        "LinkNumber",
+        "NoIncrements",
+        "ShowErrors",
+        "Side",
+        "StartPoint",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ],
+      "required": [
+        "ActivityId",
+        "EndPoint",
+        "Geometry",
+        "LinkNumber",
+        "NoIncrements",
+        "StartPoint",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ]
+    },
+    "CreateLink": {
+      "properties": [
+        "ActivityId",
+        "ApplyAOR",
+        "DisplayName",
+        "EndPoint",
+        "Geometry",
+        "Id",
+        "IsCreatingAux",
+        "IsEnabled",
+        "LinkCodes",
+        "LinkNumber",
+        "ShowErrors",
+        "StartPoint",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ],
+      "required": [
+        "ActivityId",
+        "EndPoint",
+        "Geometry",
+        "LinkNumber",
+        "StartPoint",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ]
+    },
+    "CreateLoop": {
+      "properties": [
+        "ActivityId",
+        "DisplayName",
+        "EndPoint",
+        "Geometry",
+        "Id",
+        "IsCreatingAux",
+        "Links",
+        "LoopDRepetition",
+        "LoopNumber",
+        "ShowErrors",
+        "Side",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "SurfaceTarget",
+        "TemporaryId"
+      ],
+      "required": [
+        "ActivityId",
+        "Geometry",
+        "Links",
+        "LoopDRepetition",
+        "LoopNumber",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ]
+    },
+    "CreateOffset": {
+      "properties": [
+        "Activities",
+        "ActivityId",
+        "ComponentNames",
+        "DisplayName",
+        "Geometry",
+        "Id",
+        "IsCreatingAux",
+        "Links",
+        "OffsetCodes",
+        "OffsetDistance",
+        "OffsetNumber",
+        "ShowErrors",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "_offsetLinks",
+        "_offsetPoints"
+      ],
+      "required": [
+        "ActivityId",
+        "Geometry",
+        "Links",
+        "OffsetDistance",
+        "OffsetNumber",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ]
+    },
+    "CreatePoint": {
+      "properties": [
+        "ActivityId",
+        "ApplyAOR",
+        "Arguments",
+        "AutoLink",
+        "AutoLinkCodes",
+        "AutoLinkGeometryName",
+        "DisplayName",
+        "FromPoint",
+        "Geometry",
+        "Id",
+        "IsCreatingAux",
+        "PointCodes",
+        "PointNumber",
+        "Positioning",
+        "ShowErrors",
+        "Side",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ],
+      "required": [
+        "ActivityId",
+        "Geometry",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ]
+    },
+    "CreateShape": {
+      "properties": [
+        "ActivityId",
+        "ComponentNames",
+        "DisplayName",
+        "Geometry",
+        "Id",
+        "IsCreatingAux",
+        "Links",
+        "ShapeCodes",
+        "ShapeNumber",
+        "ShowErrors",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ],
+      "required": [
+        "ActivityId",
+        "Geometry",
+        "Links",
+        "ShapeNumber",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ]
+    },
+    "CustomErrorReportActivity": {
+      "properties": [
+        "ActivityId",
+        "DisplayName",
+        "ErrorLevel",
+        "Id",
+        "Message",
+        "ShowErrors",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ],
+      "required": [
+        "ActivityId",
+        "ErrorLevel",
+        "Message",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ]
+    },
+    "CutOrFillCondition": {
+      "properties": [
+        "ActivityId",
+        "DisplayName",
+        "FalseLabel",
+        "Geometry",
+        "Id",
+        "Point",
+        "Result",
+        "ResultType",
+        "ShowErrors",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "Surface",
+        "TrueLabel"
+      ],
+      "required": [
+        "ActivityId",
+        "Geometry",
+        "Point",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "Surface"
+      ]
+    },
+    "DefineSlope": {
+      "properties": [
+        "ActivityId",
+        "DisplayName",
+        "Id",
+        "ShowErrors",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ],
+      "required": [
+        "ActivityId",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ]
+    },
+    "FilletArcActivity": {
+      "properties": [
+        "ActivityId",
+        "DisplayName",
+        "EndPointCodes",
+        "EndPointName",
+        "FirstLink",
+        "Geometry",
+        "Id",
+        "IsCreatingAux",
+        "LinkCodes",
+        "LinkNumber",
+        "RoundBy",
+        "RoundParameter",
+        "SecondLink",
+        "ShowErrors",
+        "StartPointCodes",
+        "StartPointName",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "Tessellation"
+      ],
+      "required": [
+        "ActivityId",
+        "EndPointName",
+        "FirstLink",
+        "Geometry",
+        "LinkNumber",
+        "RoundBy",
+        "RoundParameter",
+        "SecondLink",
+        "StartPointName",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "Tessellation"
+      ]
+    },
+    "GeneralCondition": {
+      "properties": [
+        "ActivityId",
+        "DisplayName",
+        "Expression",
+        "FalseLabel",
+        "Id",
+        "Result",
+        "ResultType",
+        "ShowErrors",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "TrueLabel"
+      ],
+      "required": [
+        "ActivityId",
+        "Expression",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ]
+    },
+    "GetAuxMarkPointActivity": {
+      "properties": [
+        "ActivityId",
+        "DisplayName",
+        "Geometry",
+        "Id",
+        "IsCreatingAux",
+        "MarkName",
+        "PointCodes",
+        "PointNumber",
+        "PrevDeltaElevation",
+        "PrevFromPoint",
+        "PrevOffset",
+        "ShowErrors",
+        "Side",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ],
+      "required": [
+        "ActivityId",
+        "Geometry",
+        "MarkName",
+        "PrevDeltaElevation",
+        "PrevOffset",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ]
+    },
+    "GetMarkPointActivity": {
+      "properties": [
+        "ActivityId",
+        "DisplayName",
+        "Geometry",
+        "Id",
+        "IsCreatingAux",
+        "MarkName",
+        "PointCodes",
+        "PointNumber",
+        "PrevDeltaElevation",
+        "PrevFromPoint",
+        "PrevOffset",
+        "ShowErrors",
+        "Side",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ],
+      "required": [
+        "ActivityId",
+        "Geometry",
+        "MarkName",
+        "PrevDeltaElevation",
+        "PrevOffset",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ]
+    },
+    "HasDaylight": {
+      "properties": [
+        "ActivityId",
+        "DisplayName",
+        "FalseLabel",
+        "FromPoint",
+        "Geometry",
+        "Id",
+        "Result",
+        "ResultType",
+        "ReverseSlopeDirection",
+        "ShowErrors",
+        "Side",
+        "Slope",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "SurfaceTarget",
+        "TrueLabel"
+      ],
+      "required": [
+        "ActivityId",
+        "FromPoint",
+        "Geometry",
+        "ReverseSlopeDirection",
+        "Side",
+        "Slope",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "SurfaceTarget"
+      ]
+    },
+    "HasIntersection": {
+      "properties": [
+        "ActivityId",
+        "DisplayName",
+        "ExtendFirstLink",
+        "ExtendSecondLink",
+        "FalseLabel",
+        "FirstLink",
+        "Geometry",
+        "Id",
+        "Result",
+        "ResultType",
+        "SecondLink",
+        "ShowErrors",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "TrueLabel"
+      ],
+      "required": [
+        "ActivityId",
+        "ExtendFirstLink",
+        "ExtendSecondLink",
+        "FirstLink",
+        "Geometry",
+        "SecondLink",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ]
+    },
+    "InternalVariableDefine": {
+      "properties": [
+        "ActivityId",
+        "DefaultValue",
+        "DisplayName",
+        "Id",
+        "OldVariableName",
+        "OldVariableType",
+        "ShowErrors",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "Variable",
+        "VariableName",
+        "VariableType"
+      ],
+      "required": [
+        "ActivityId",
+        "DefaultValue",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "VariableName",
+        "VariableType"
+      ]
+    },
+    "IsSuperelevationDefined": {
+      "properties": [
+        "ActivityId",
+        "CrossSlopeToCheck",
+        "DisplayName",
+        "FalseLabel",
+        "Id",
+        "Result",
+        "ResultType",
+        "ShowErrors",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "TrueLabel"
+      ],
+      "required": [
+        "ActivityId",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ]
+    },
+    "LinkIntersection": {
+      "properties": [
+        "ActivityId",
+        "Arguments",
+        "CreationType",
+        "DisplayName",
+        "Geometry",
+        "Id",
+        "Index",
+        "IsCreatingAux",
+        "PointCodes",
+        "PointNumber",
+        "ShowErrors",
+        "Side",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ],
+      "required": [
+        "ActivityId",
+        "Geometry",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ]
+    },
+    "RoundDayLightActivity": {
+      "properties": [
+        "ActivityId",
+        "Arguments",
+        "DayLightLink",
+        "DisplayName",
+        "EndPointCodes",
+        "EndPointName",
+        "Geometry",
+        "Id",
+        "IsCreatingAux",
+        "LinkCodes",
+        "LinkNumber",
+        "RoundOption",
+        "ShowErrors",
+        "Side",
+        "StartPointCodes",
+        "StartPointName",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "Surface",
+        "Tessellation"
+      ],
+      "required": [
+        "ActivityId",
+        "DayLightLink",
+        "EndPointName",
+        "Geometry",
+        "LinkNumber",
+        "StartPointName",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "Surface",
+        "Tessellation"
+      ]
+    },
+    "SetMarkPointActivity": {
+      "properties": [
+        "ActivityId",
+        "DisplayName",
+        "Geometry",
+        "Id",
+        "MarkName",
+        "PointNumber",
+        "ShowErrors",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ],
+      "required": [
+        "ActivityId",
+        "Geometry",
+        "MarkName",
+        "PointNumber",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ]
+    },
+    "SetOutputParameterValue": {
+      "properties": [
+        "ActivityId",
+        "DisplayName",
+        "Id",
+        "OutputParammeter",
+        "ShowErrors",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "Value"
+      ],
+      "required": [
+        "ActivityId",
+        "OutputParammeter",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "Value"
+      ]
+    },
+    "SetVariableValue": {
+      "properties": [
+        "ActivityId",
+        "DisplayName",
+        "Id",
+        "ShowErrors",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "VariableName",
+        "VariableValue"
+      ],
+      "required": [
+        "ActivityId",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "VariableName",
+        "VariableValue"
+      ]
+    },
+    "StripSurfaceActivity": {
+      "properties": [
+        "ActivityId",
+        "Depth",
+        "DepthForLayoutMode",
+        "DisplayName",
+        "EndOffset",
+        "EndOffsetTarget",
+        "EndPointCodes",
+        "EndPointName",
+        "Geometry",
+        "Id",
+        "IsCreatingAux",
+        "LinkCodes",
+        "LinkNumber",
+        "ShowErrors",
+        "Side",
+        "StartOffset",
+        "StartOffsetTarget",
+        "StartPointCodes",
+        "StartPointName",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "Surface"
+      ],
+      "required": [
+        "ActivityId",
+        "Depth",
+        "DepthForLayoutMode",
+        "EndOffset",
+        "EndPointName",
+        "Geometry",
+        "LinkNumber",
+        "StartOffset",
+        "StartPointName",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "Surface"
+      ]
+    },
+    "StripSurfaceAuxActivity": {
+      "properties": [
+        "ActivityId",
+        "Depth",
+        "DepthForLayoutMode",
+        "DisplayName",
+        "EndOffset",
+        "EndOffsetTarget",
+        "EndPointCodes",
+        "EndPointName",
+        "Geometry",
+        "Id",
+        "IsCreatingAux",
+        "LinkCodes",
+        "LinkNumber",
+        "ShowErrors",
+        "Side",
+        "StartOffset",
+        "StartOffsetTarget",
+        "StartPointCodes",
+        "StartPointName",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "Surface"
+      ],
+      "required": [
+        "ActivityId",
+        "Depth",
+        "DepthForLayoutMode",
+        "EndOffset",
+        "EndPointName",
+        "Geometry",
+        "LinkNumber",
+        "StartOffset",
+        "StartPointName",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode",
+        "Surface"
+      ]
+    },
+    "SwitchCondition": {
+      "properties": [
+        "ActivityId",
+        "CaseConditionArguments",
+        "CaseLabelArguments",
+        "CaseNumber",
+        "DisplayName",
+        "Id",
+        "Result",
+        "ResultType",
+        "ShowErrors",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ],
+      "required": [
+        "ActivityId",
+        "SubassemblyErrorCenter",
+        "SubassemblyRunMode"
+      ]
+    }
+  }
+}

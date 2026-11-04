@@ -35,7 +35,7 @@ sac-validate = "sac_mcp.core.validator:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-sac_mcp = ["templates/*.pkt"]
+sac_mcp = ["templates/*.pkt", "native/*.cs", "native/*.json"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

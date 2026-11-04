@@ -12,8 +12,9 @@
 Chạy qua [sac-cli.bat](sac-cli.bat) (dùng Python trong `.venv`):
 
 ```powershell
-# 1. Kiểm định 3 tầng một file .pkt bất kỳ (~1 giây / file khi chạy cả Tầng 3)
+# 1. Kiểm định 3 tầng một file .pkt bất kỳ
 .\sac-cli.bat validate "D:\duong\dan\file.pkt"
+.\sac-cli.bat validate "D:\duong\dan\file.pkt" --doc         # thêm bước mở bằng SubassemblyDocument (~2 giây)
 .\sac-cli.bat validate "D:\duong\dan\file.pkt" --no-native   # bỏ qua Tầng 3
 
 # 2. Dựng sub Gia Cố Mái Taluy Phú Yên và tự động kiểm định
@@ -36,33 +37,43 @@ Chạy qua [sac-cli.bat](sac-cli.bat) (dùng Python trong `.venv`):
 3. Mặc định `~/Desktop/SUB PHU YEN`
 
 > Lưu ý: `build --giaco` / `--sub7` cũng ghi lại các file mẫu tương ứng trong `examples/`.
+> `build --sub7` (`scripts/rebuild_7_subassemblies.py`) ghi vào **cùng thư mục** `Bo_7_Subassembly_Chuan/`
+> với các file do `NativeSuiteBuilder` sinh, nhưng nội dung khác (chỉ có tham số, không có hình học).
 
 ---
 
 ## 2. Kiến Trúc Kiểm Định 3 Tầng
 
 ```text
-[File .pkt] ──> Tầng 1: OPC & XML ──> Tầng 2: WF4 / XAML ──> Tầng 3: Native SAC (WorkflowEditor.dll)
+[File .pkt] ──> Tầng 1: OPC & XML ──> Tầng 2: XAML tĩnh + ngữ nghĩa ──> Tầng 3: DLL gốc của SAC
 ```
 
-1. **Tầng 1 (OPC Package & XML Escaping):**
+1. **Tầng 1 (OPC Package & XML):**
    - Đủ 6 file định danh GUID (`.atc`, `.cfg`, `.xaml`, `.pvd`, `.emd`, `.cdmd`) và `[Content_Types].xml`.
    - XML hợp lệ, ký tự `&` đã được escape.
-2. **Tầng 2 (WF4 / XAML Semantic Syntax):**
+2. **Tầng 2 (XAML tĩnh, chạy được khi máy không cài SAC):**
    - File `.xaml` có UTF-8 BOM và không có header `<?xml...>`.
-   - Tên biến là định danh VB.NET hợp lệ.
-   - Đối số `<InArgument>` dạng biến / biểu thức được bọc trong `[...]`.
-   - Không dùng thẻ mock `sac:`.
-3. **Tầng 3 (Native Autodesk Runtime Hook):** khởi tạo `SubassemblyDocument` từ `WorkflowEditor.dll` của Subassembly Composer cài trên máy.
+   - Tên biến là định danh VB.NET hợp lệ; biểu thức trong `<InArgument>` được bọc `[...]`; không dùng thẻ mock `sac:`.
+   - Ngữ nghĩa ([semantic_checks.py](src/sac_mcp/core/semantic_checks.py)), dựa trên danh mục lấy từ `Subassembly.ActivityLibrary.dll`:
 
-> ⚠️ **Giới hạn hiện tại của Tầng 3:** bước này chỉ xác nhận SAC **mở được gói** (bắt được ví dụ `x:Reference` trỏ tới node không tồn tại).
->
-> Nó **chưa** dựng activity và **chưa** biên dịch biểu thức VB, nên **không** phát hiện:
-> - Tag activity sai tên.
-> - Biến chưa khai báo.
-> - Cú pháp VB hỏng.
->
-> Vẫn cần mở thử trong Subassembly Composer để chắc chắn. Nâng cấp phần này nằm trong Giai đoạn 1 của lộ trình.
+   | Mã lỗi | Mức | Ý nghĩa |
+   | :--- | :--- | :--- |
+   | `ACTIVITY_UNKNOWN` | ERROR | Thẻ activity không tồn tại. |
+   | `ATTRIBUTE_UNKNOWN` | ERROR | Activity không có thuộc tính đó (SAC không mở được file). |
+   | `ARGUMENT_REQUIRED` | ERROR | Thiếu đối số bắt buộc (`[RequiredArgument]`). |
+   | `FLOW_REFERENCE` | ERROR | `x:Reference` trỏ tới node không tồn tại. |
+   | `FLOW_UNREACHABLE` | WARNING | Node không nối vào luồng từ StartNode nên không bao giờ chạy. |
+   | `GEOMETRY_REFERENCE` | WARNING | `FromPoint` / `StartPoint` / `Links`... tham chiếu Point / Link chưa được tạo. |
+
+3. **Tầng 3 (DLL gốc của Subassembly Composer):** qua tiến trình nền `SacHost.exe` ([native/](src/sac_mcp/native/)).
+   - Nạp XAML thành cây activity, rồi `ActivityValidationServices.Validate` **biên dịch mọi biểu thức VB**: bắt biến chưa khai báo, cú pháp hỏng, sai kiểu. Lỗi chỉ rõ vị trí, ví dụ *Biểu thức [LaneWidthh * 2] (trong CreatePoint 'P2&L1', đối số DeltaX1): 'LaneWidthh' is not declared*.
+   - Dùng **đúng phiên bản SAC** theo `.cfg` của file (13.6 → 2024 … 13.9 → 2027); nếu máy không có bản đó thì dùng bản mới nhất và ghi INFO. Ghi đè bằng biến môi trường `SAC_INSTALL_DIR`.
+   - Tuỳ chọn `document_check` / `--doc`: mở thêm bằng `SubassemblyDocument` giống SAC GUI, trong một AppDomain riêng (~2 giây/file).
+   - Máy không cài SAC: Tầng 3 được bỏ qua kèm INFO, Tầng 1–2 vẫn chạy đủ.
+
+**Tốc độ:** tiến trình nền được giữ lại giữa các lần gọi. Lần đầu mất khoảng 0,5 giây; các lần sau khoảng 10 ms/file (40 file mẫu: ~2,6 giây).
+
+**Lần chạy đầu tiên:** `SacHost.cs` được biên dịch bằng `csc.exe` có sẵn của .NET Framework 4.x và lưu tại `%LOCALAPPDATA%\sac_mcp\host\<hash>\SacHost.exe`. Bản này tự biên dịch lại khi mã nguồn đổi.
 
 ---
 
@@ -75,9 +86,12 @@ Mọi tool MCP sửa file `.pkt` đều đi qua cùng một quy trình:
 3. **Sao lưu** file gốc thành `<tên>.pkt.bak` (chỉ giữ bản gần nhất).
 4. **Thay thế nguyên tử** (`os.replace`), nên không bao giờ để lại file ghi dở.
 
+Sau khi lưu, tool chạy thêm **Tầng 3** (khi máy có SAC) và đưa lỗi biên dịch VB vào `warnings`, **không chặn** thao tác.
+Lý do: khi dựng dần, việc tạm dùng một Parameter chưa thêm là bình thường. Tắt bằng `SAC_MCP_NATIVE_ON_SAVE=0`.
+
 Kết quả JSON của tool có thêm:
 
-- `warnings`: các vấn đề không chặn nhưng cần biết, ví dụ không đồng bộ được Parameter sang `.atc`, hoặc nhiều nhánh luồng được nối hội tụ.
+- `warnings`: các vấn đề không chặn nhưng cần biết, ví dụ lỗi Tầng 3, không đồng bộ được Parameter sang `.atc`, hoặc nhiều nhánh luồng được nối hội tụ.
 - `backup_path`: đường dẫn bản sao lưu.
 
 Khi lỗi, tool trả về JSON `{ "success": false, "error_type", "message", "hint", "issues" }` thay vì traceback.
@@ -103,7 +117,7 @@ Khi lỗi, tool trả về JSON `{ "success": false, "error_type", "message", "h
 | Nhóm | Tool | Chức năng |
 | :--- | :--- | :--- |
 | Đọc | `inspect_pkt` | Giải nén `.pkt`, đọc metadata, Parameters, Points, Links, Shapes và sơ đồ Flowchart (kèm `reference_id`). |
-| Đọc | `validate_pkt_native` | Kiểm định 3 tầng (xem giới hạn của Tầng 3 ở mục 2). |
+| Đọc | `validate_pkt_native` | Kiểm định 3 tầng; `document_check=True` để mở thêm bằng SubassemblyDocument. |
 | Đọc | `get_sac_reference_and_formulas` | Tra cứu Toolbox, quy ước đặt tên, công thức siêu cao 8 nhánh, hàm VB và API của SAC. |
 | Đọc | `list_examples_and_split_catalog` | Liệt kê các file `.pkt` mẫu và bộ 7 subassembly mô-đun hóa. |
 | Tạo | `create_pkt_from_template` | Tạo `.pkt` mới chuẩn 7 file cho Civil 3D 2025 / 2026 / 2027 (ghi đè thì tự lưu `.bak`). |
@@ -111,10 +125,10 @@ Khi lỗi, tool trả về JSON `{ "success": false, "error_type", "message", "h
 | Sửa | `add_parameter` | Thêm Input/Output/Target Parameter; Input được đồng bộ vào `<Params>` của `.atc`. |
 | Sửa | `add_point_and_link` | Thêm Point / AuxPoint (6 kiểu định vị qua MCP) và tự nối Link. |
 | Sửa | `add_link` | Nối 2 điểm có sẵn bằng `CreateLink` / `CreateAuxLink`. |
-| Sửa | `add_fillet_arc` | Bo cong góc giữa các Link (`FilletArcActivity`). |
+| Sửa | `add_fillet_arc` | Bo cong góc giữa 2 Link (`FilletArcActivity`); cần `second_link`, tự đặt tên điểm đầu/cuối nếu bỏ trống. |
 | Sửa | `add_loop_geometry` | Vòng lặp hình học `CreateLoop` (giật cơ nhiều tầng). |
 | Sửa | `add_intersection_point` | Giao điểm 2 Link (`LinkIntersection` / `AuxIntersection`). |
-| Sửa | `add_strip_surface` | Bóc hữu cơ theo chiều sâu (`StripSurfaceActivity`). |
+| Sửa | `add_strip_surface` | Bóc hữu cơ theo chiều sâu (`StripSurfaceActivity`) trên bề mặt `surface_target` (mặc định `EG`). |
 | Sửa | `add_shape` | Tạo `CreateShape` từ danh sách Link khép kín. |
 | Sửa | `add_report_message` | Thêm `CustomErrorReportActivity`, có thể kèm điều kiện `FlowDecision`. |
 
@@ -130,14 +144,20 @@ MCP - SUBBASEMBLY/
 │   ├── rebuild_7_subassemblies.py       # Dựng bộ 7 subassembly mô-đun hóa
 │   ├── split_visual_infra.py            # Bóc tách gói SACVisualInfra.pkt
 │   ├── generate_base_templates.py       # Sinh lại templates/base_2025..2027.pkt (ghi đè)
+│   ├── update_activity_catalog.py       # Sinh lại native/activity_catalog.json từ DLL của SAC
 │   ├── test_doc_ctor.ps1 / test_load_sac.ps1
 ├── src/sac_mcp/
 │   ├── server.py                        # MCP server (15 tool)
 │   ├── cli.py                           # sac-cli: validate / build / test
 │   ├── paths.py                         # Thư mục xuất (SAC_OUTPUT_DIR)
 │   ├── models/schemas.py                # Pydantic schemas & enums
+│   ├── native/
+│   │   ├── SacHost.cs                   # Host .NET dùng DLL gốc của SAC (Tầng 3)
+│   │   ├── host.py                      # Biên dịch, cache và quản lý tiến trình SacHost
+│   │   └── activity_catalog.json        # Danh mục activity / thuộc tính / đối số bắt buộc
 │   └── core/
 │       ├── validator.py                 # Kiểm định 3 tầng (PktValidator)
+│       ├── semantic_checks.py           # Kiểm tra ngữ nghĩa tĩnh (Tầng 2)
 │       ├── opc_package.py               # Đọc / ghi an toàn gói .pkt
 │       ├── xaml_engine.py               # Parser, mutator và mô hình đồ thị Flowchart
 │       ├── version_manager.py           # Cấu hình theo phiên bản Civil 3D

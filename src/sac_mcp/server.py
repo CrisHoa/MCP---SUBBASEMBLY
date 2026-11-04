@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import functools
 import json
+import os
 import zipfile
 from pathlib import Path
 from typing import Callable, List, Literal, Optional, Tuple
@@ -108,10 +109,32 @@ def _safe_tool(action: str):
 MutationFn = Callable[[PktPackage, FlowchartEngine], Tuple[dict, str, List[Optional[str]]]]
 
 
+NATIVE_ON_SAVE_ENV = "SAC_MCP_NATIVE_ON_SAVE"
+
+
+def _native_warnings(pkt_path: Path) -> List[str]:
+    """
+    Chạy Tầng 3 (biên dịch VB bằng DLL gốc) sau khi lưu và trả lỗi dưới dạng cảnh báo.
+    Không chặn thao tác: khi dựng dần từng bước, việc tạm tham chiếu Parameter chưa thêm là bình thường.
+    Tắt bằng biến môi trường SAC_MCP_NATIVE_ON_SAVE=0.
+    """
+    if os.environ.get(NATIVE_ON_SAVE_ENV, "1") == "0":
+        return []
+    from sac_mcp.core.validator import PktValidator
+
+    rep = PktValidator.validate_pkt(pkt_path, run_native_test=True)
+    return [
+        f"Tầng 3 [{i.category}]: {i.message}"
+        for i in rep.issues
+        if i.severity == "ERROR" and (i.category.startswith("NATIVE") or i.category == "VB_EXPRESSION")
+    ]
+
+
 def _mutate_pkt(action: str, pkt_path: str, fn: MutationFn) -> str:
     """
     Khung chung cho mọi tool sửa file .pkt:
-    mở gói -> sửa XAML -> kiểm định Tầng 1+2 -> sao lưu .bak -> ghi nguyên tử -> trả JSON.
+    mở gói -> sửa XAML -> kiểm định Tầng 1+2 -> sao lưu .bak -> ghi nguyên tử
+    -> chạy Tầng 3 (báo dưới dạng cảnh báo) -> trả JSON.
     `fn(pkg, engine)` trả về (details, message, created_reference_ids).
     """
     try:
@@ -127,7 +150,7 @@ def _mutate_pkt(action: str, pkt_path: str, fn: MutationFn) -> str:
             message=message,
             created_reference_ids=[r for r in ref_ids if r],
             details=details,
-            warnings=engine.warnings + pkg.warnings,
+            warnings=engine.warnings + pkg.warnings + _native_warnings(pkg.pkt_path),
             backup_path=str(pkg.last_backup_path) if pkg.last_backup_path else None,
         )
         return json.dumps(res.model_dump(), ensure_ascii=False, indent=2)
@@ -451,11 +474,12 @@ def add_fillet_arc(
     pkt_path: str,
     link_number: str,
     first_link: str,
-    second_link: Optional[str] = None,
+    second_link: str,
     round_radius: float = 0.05,
     end_point_name: Optional[str] = None,
     link_codes_str: str = "",
     parent_node_id: Optional[str] = None,
+    start_point_name: Optional[str] = None,
 ) -> str:
     """
     Thêm khối bo tròn góc cong Fillet Arc (<asa1:FilletArcActivity>) vào Flowchart.
@@ -465,11 +489,12 @@ def add_fillet_arc(
         pkt_path: Đường dẫn tới file .pkt cần chỉnh sửa.
         link_number: Mã Link cong mới (VD: 'L6').
         first_link: Mã Link phụ trợ đầu tiên tiếp xúc (VD: 'AL1').
-        second_link: (Tùy chọn) Mã Link thứ 2 tiếp xúc.
+        second_link: Mã Link thứ 2 tiếp xúc (bắt buộc, VD: 'AL2').
         round_radius: Bán kính bo cong (m), mặc định 0.05m = 5cm.
-        end_point_name: (Tùy chọn) Mã Point tại điểm kết thúc cung tròn (VD: 'P8').
+        end_point_name: (Tùy chọn) Mã Point tại điểm kết thúc cung tròn (VD: 'P8'); bỏ trống thì tự đặt '<link>_End'.
         link_codes_str: Chuỗi Code gán cho đường cong (VD: '\"Top\", \"Link_Bo DPC\"').
         parent_node_id: (Tùy chọn) __ReferenceID của node cha.
+        start_point_name: (Tùy chọn) Mã Point tại điểm đầu cung tròn (VD: 'P7'); bỏ trống thì tự đặt '<link>_Start'.
     """
     def _apply(pkg: PktPackage, engine: FlowchartEngine):
         info = GeometryBuilder.add_fillet_arc(
@@ -481,6 +506,7 @@ def add_fillet_arc(
             end_point_name=end_point_name,
             link_codes_str=link_codes_str,
             parent_node_id=parent_node_id,
+            start_point_name=start_point_name,
         )
         msg = f"Đã thêm cung bo cong Fillet Arc '{link_number}' (R={round_radius}m) tại node {info['reference_id']}."
         return info, msg, [info["reference_id"]]
@@ -574,6 +600,10 @@ def add_strip_surface(
     end_offset_target: Optional[str] = None,
     link_codes_str: str = "Link_VHC",
     parent_node_id: Optional[str] = None,
+    surface_target: str = "EG",
+    start_point_name: Optional[str] = None,
+    start_offset: Optional[str] = None,
+    link_number: Optional[str] = None,
 ) -> str:
     """
     Thêm khối bóc hữu cơ / bề mặt (<asa2:StripSurfaceActivity>).
@@ -588,6 +618,10 @@ def add_strip_surface(
         end_offset_target: (Tùy chọn) Biến Target offset giới hạn (VD: 'Offset_Tim_Tuyen').
         link_codes_str: Chuỗi Link Code gán cho đáy lớp bóc hữu cơ (mặc định 'Link_VHC').
         parent_node_id: (Tùy chọn) __ReferenceID của node cha.
+        surface_target: Tên Target Parameter kiểu SurfaceTarget của bề mặt cần bóc (mặc định 'EG').
+        start_point_name: (Tùy chọn) Tên Point tại đầu dải bóc (VD: 'P36').
+        start_offset: (Tùy chọn) Offset bắt đầu, số hoặc biểu thức (VD: 'P32.X').
+        link_number: (Tùy chọn) Mã Link đáy lớp bóc (VD: 'L36').
     """
     def _apply(pkg: PktPackage, engine: FlowchartEngine):
         info = GeometryBuilder.add_strip_surface(
@@ -599,6 +633,10 @@ def add_strip_surface(
             end_offset_target=end_offset_target,
             link_codes_str=link_codes_str,
             parent_node_id=parent_node_id,
+            surface_target=surface_target,
+            start_point_name=start_point_name,
+            start_offset=start_offset,
+            link_number=link_number,
         )
         msg = (
             f"Đã thêm khối bóc hữu cơ StripSurface '{display_name}' (Depth={depth_expr}) "
@@ -843,14 +881,22 @@ def list_examples_and_split_catalog() -> str:
 # ============================================================================
 @mcp.tool()
 @_safe_tool("validate_pkt_native")
-def validate_pkt_native(pkt_path: str) -> str:
-    """Kiểm định toàn diện 3 tầng file Subassembly (.pkt) trước khi mở bằng Subassembly Composer hoặc import vào Civil 3D.
-    Tầng 1: Cấu trúc OPC Package & XML Escaping
-    Tầng 2: WF4 / XAML Semantics (Bọc [...] biểu thức tham số, tên biến VB.NET hợp lệ, activity hợp lệ)
-    Tầng 3: Native Autodesk Runtime Hook (Gọi SubassemblyDocument trực tiếp từ DLL gốc Autodesk WorkflowEditor.dll)
+def validate_pkt_native(pkt_path: str, document_check: bool = False) -> str:
+    """Kiểm định 3 tầng file Subassembly (.pkt) trước khi mở bằng Subassembly Composer hoặc nạp vào Civil 3D.
+
+    Tầng 1: Cấu trúc OPC Package & XML.
+    Tầng 2: XAML tĩnh: BOM, biểu thức bọc [...], tên biến VB; activity / thuộc tính / đối số bắt buộc
+            có thật trong Subassembly.ActivityLibrary; x:Reference không treo; node mồ côi;
+            tham chiếu Point / Link đã được tạo.
+    Tầng 3: DLL gốc của đúng phiên bản SAC: nạp cây activity và biên dịch MỌI biểu thức VB
+            (biến chưa khai báo, cú pháp hỏng, sai kiểu). Bỏ qua nếu máy không cài SAC.
+
+    Args:
+        pkt_path: Đường dẫn file .pkt.
+        document_check: True để mở thêm bằng SubassemblyDocument như SAC GUI (chậm hơn ~2 giây).
     """
     from sac_mcp.core.validator import PktValidator
-    rep = PktValidator.validate_pkt(pkt_path, run_native_test=True)
+    rep = PktValidator.validate_pkt(pkt_path, run_native_test=True, document_check=document_check)
     return json.dumps(
         {
             "pkt_path": rep.pkt_path,

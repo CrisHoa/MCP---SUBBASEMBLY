@@ -31,7 +31,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
         print(f"❌ File không tồn tại: {target}")
         return 1
 
-    report = PktValidator.validate_pkt(target, run_native_test=not args.no_native)
+    report = PktValidator.validate_pkt(target, run_native_test=not args.no_native, document_check=args.doc)
     report.print_summary()
     return 0 if report.is_valid else 1
 
@@ -106,7 +106,8 @@ def main() -> None:
     # Lệnh validate
     p_val = subparsers.add_parser("validate", help="Kiểm định file .pkt qua 3 tầng (OPC, XAML, Native DLL)")
     p_val.add_argument("target", help="Đường dẫn file .pkt cần kiểm định")
-    p_val.add_argument("--no-native", action="store_true", help="Bỏ qua tầng kiểm thử native DLL")
+    p_val.add_argument("--no-native", action="store_true", help="Bỏ qua Tầng 3 (DLL gốc của SAC)")
+    p_val.add_argument("--doc", action="store_true", help="Tầng 3 mở thêm bằng SubassemblyDocument như SAC GUI (~2 giây)")
     p_val.set_defaults(func=cmd_validate)
 
     # Lệnh build

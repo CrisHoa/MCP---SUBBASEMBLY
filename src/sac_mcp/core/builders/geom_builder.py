@@ -6,6 +6,7 @@ FilletArcActivity, LinkIntersection, AuxIntersection, StripSurfaceActivity.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Optional
 from lxml import etree
 
@@ -501,9 +502,18 @@ class GeometryBuilder:
         end_point_name: Optional[str] = None,
         link_codes_str: str = "",
         parent_node_id: Optional[str] = None,
+        start_point_name: Optional[str] = None,
     ) -> dict:
         link_number = link_number.strip()
         first_link = first_link.strip()
+        if not second_link or not second_link.strip():
+            raise ValueError("FilletArcActivity cần đủ 2 Link tiếp xúc: hãy truyền second_link.")
+        if not start_point_name:
+            start_point_name = f"{link_number}_Start"
+            engine.warnings.append(f"Fillet '{link_number}': tự đặt tên điểm đầu cung là '{start_point_name}'.")
+        if not end_point_name:
+            end_point_name = f"{link_number}_End"
+            engine.warnings.append(f"Fillet '{link_number}': tự đặt tên điểm cuối cung là '{end_point_name}'.")
         ref_id = engine.next_reference_id()
         step_vs_id = engine.next_viewstate_idref("FlowStep")
         act_id = engine.next_activity_id()
@@ -516,22 +526,26 @@ class GeometryBuilder:
             },
         )
 
+        # Thuộc tính theo đúng FilletArcActivity do SAC lưu (xem examples/Bo-DPC.pkt).
+        # Lưu ý: FilletArcActivity KHÔNG có ApplyAOR / RoundRadius / IsEnabled.
         arc_attrs = {
             "ActivityId": act_id,
-            "ApplyAOR": "False",
             "DisplayName": link_number,
             "LinkNumber": link_number,
             "FirstLink": first_link,
-            "RoundRadius": str(round_radius),
+            "RoundBy": "ByRadius",
+            "RoundParameter": str(round_radius),
+            "Tessellation": "10",
+            "EndPointCodes": "{x:Null}",
             "Geometry": "[Geometry]",
-            "IsEnabled": "True",
             "ShowErrors": "True",
+            "SubassemblyErrorCenter": "[SubassemblyErrorCenter]",
+            "SubassemblyRunMode": "[SubassemblyRunMode]",
             engine.qn("sap", "VirtualizedContainerService.HintSize"): "200,22.4",
         }
-        if second_link:
-            arc_attrs["SecondLink"] = second_link.strip()
-        if end_point_name:
-            arc_attrs["EndPointName"] = end_point_name.strip()
+        arc_attrs["SecondLink"] = second_link.strip()
+        arc_attrs["StartPointName"] = start_point_name.strip()
+        arc_attrs["EndPointName"] = end_point_name.strip()
 
         codes_list = [
             c.strip().strip('"').strip("'")
@@ -582,6 +596,9 @@ class GeometryBuilder:
             "linked_from_reference_id": linked_from or "Flowchart.StartNode",
             "link_number": link_number,
             "first_link": first_link,
+            "second_link": second_link,
+            "start_point_name": start_point_name,
+            "end_point_name": end_point_name,
             "round_radius": round_radius,
             "link_codes": codes_list,
             "view_location": f"{x_pos},{y_pos}",
@@ -621,6 +638,8 @@ class GeometryBuilder:
                 "LoopDRepetition": str(repetition_count),
                 "Geometry": "[Geometry]",
                 "ShowErrors": "True",
+                "SubassemblyErrorCenter": "[SubassemblyErrorCenter]",
+                "SubassemblyRunMode": "[SubassemblyRunMode]",
                 engine.qn("sap", "VirtualizedContainerService.HintSize"): "200,22.4",
             },
         )
@@ -685,6 +704,8 @@ class GeometryBuilder:
                 "Geometry": "[Geometry]",
                 "ShowErrors": "True",
                 "Side": "[Side]",
+                "SubassemblyErrorCenter": "[SubassemblyErrorCenter]",
+                "SubassemblyRunMode": "[SubassemblyRunMode]",
                 engine.qn("sap", "VirtualizedContainerService.HintSize"): "200,22.4",
             },
         )
@@ -773,7 +794,27 @@ class GeometryBuilder:
         end_offset_target: Optional[str] = None,
         link_codes_str: str = "Link_VHC",
         parent_node_id: Optional[str] = None,
+        surface_target: str = "EG",
+        start_point_name: Optional[str] = None,
+        start_offset: Optional[str] = None,
+        link_number: Optional[str] = None,
     ) -> dict:
+        base = re.sub(r"[^A-Za-z0-9_]", "_", display_name.strip()) or "Strip"
+        auto_named = []
+        if not end_point_name:
+            end_point_name = f"{base}_End"
+            auto_named.append(f"điểm cuối '{end_point_name}'")
+        if not start_point_name:
+            start_point_name = f"{base}_Start"
+            auto_named.append(f"điểm đầu '{start_point_name}'")
+        if not link_number:
+            link_number = f"{base}_Link"
+            auto_named.append(f"link đáy '{link_number}'")
+        if start_offset is None or not str(start_offset).strip():
+            start_offset = "0"
+        if auto_named:
+            engine.warnings.append(f"StripSurface '{display_name}': tự đặt tên {', '.join(auto_named)}.")
+
         ref_id = engine.next_reference_id()
         step_vs_id = engine.next_viewstate_idref("FlowStep")
         act_id = engine.next_activity_id()
@@ -786,32 +827,32 @@ class GeometryBuilder:
             },
         )
 
-        strip_el = etree.SubElement(
-            flow_step,
-            engine.qn("asa2", "StripSurfaceActivity"),
-            attrib={
-                "ActivityId": act_id,
-                "DisplayName": display_name,
-                "Geometry": "[Geometry]",
-                "ShowErrors": "True",
-                engine.qn("sap", "VirtualizedContainerService.HintSize"): "200,22.4",
-            },
-        )
-        args_el = etree.SubElement(strip_el, engine.qn("asa2", "StripSurfaceActivity.Arguments"))
-        dp_arg = etree.SubElement(
-            args_el,
-            engine.qn("wf", "InArgument"),
-            attrib={engine.qn("x", "TypeArguments"): "x:Double", engine.qn("x", "Key"): "StripDepth"},
-        )
-        dp_arg.text = str(depth_expr)
+        # Thuộc tính theo đúng StripSurfaceActivity do SAC lưu (xem examples/A_Taluy co ranh-Giatco-VHC v1.pkt).
+        # StripSurfaceActivity không có phần tử .Arguments: mọi giá trị là thuộc tính trực tiếp.
+        strip_attrs = {
+            "ActivityId": act_id,
+            "DisplayName": display_name,
+            "Depth": format_arg_expr(depth_expr),
+            "DepthForLayoutMode": "0",
+            "EndOffset": format_arg_expr(end_offset),
+            "EndOffsetTarget": format_arg_expr(end_offset_target) if end_offset_target else "{x:Null}",
+            "EndPointCodes": "{x:Null}",
+            "Geometry": "[Geometry]",
+            "ShowErrors": "True",
+            "Side": "[Side]",
+            "StartOffsetTarget": "{x:Null}",
+            "StartPointCodes": "{x:Null}",
+            "SubassemblyErrorCenter": "[SubassemblyErrorCenter]",
+            "SubassemblyRunMode": "[SubassemblyRunMode]",
+            "Surface": format_arg_expr(surface_target),
+            engine.qn("sap", "VirtualizedContainerService.HintSize"): "200,22.4",
+        }
+        strip_attrs["EndPointName"] = end_point_name.strip()
+        strip_attrs["StartPointName"] = start_point_name.strip()
+        strip_attrs["StartOffset"] = format_arg_expr(start_offset)
+        strip_attrs["LinkNumber"] = link_number.strip()
 
-        if end_point_name:
-            ep_arg = etree.SubElement(
-                args_el,
-                engine.qn("wf", "InArgument"),
-                attrib={engine.qn("x", "TypeArguments"): "x:String", engine.qn("x", "Key"): "EndPointName"},
-            )
-            ep_arg.text = str(end_point_name)
+        strip_el = etree.SubElement(flow_step, engine.qn("asa2", "StripSurfaceActivity"), attrib=strip_attrs)
 
         codes_list = [
             c.strip().strip('"').strip("'")
@@ -856,6 +897,9 @@ class GeometryBuilder:
             "display_name": display_name,
             "depth_expr": depth_expr,
             "end_point_name": end_point_name,
+            "start_point_name": start_point_name,
+            "link_number": link_number,
+            "surface_target": surface_target,
             "view_location": f"{x_pos},{y_pos}",
         }
 
@@ -1109,6 +1153,8 @@ class GeometryBuilder:
             "Geometry": "[Geometry]",
             "MarkName": mark_name,
             "PointNumber": point_number,
+            "PrevOffset": "0",
+            "PrevDeltaElevation": "0",
             "ShowErrors": "True",
             "Side": "[Side]",
             "SubassemblyErrorCenter": "[SubassemblyErrorCenter]",
