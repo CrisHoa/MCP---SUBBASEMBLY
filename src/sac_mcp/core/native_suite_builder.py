@@ -482,3 +482,98 @@ class NativeSuiteBuilder:
         pkg.set_xaml_text(engine.to_xaml_string())
         pkg.save()
         return out_p
+
+    @classmethod
+    def build_09_tuong_chan_cat_3_3(cls, output_path: str | Path, version: str = "2026") -> Path:
+        """Cấu kiện 9: Tường chắn / Gờ chắn bê tông mặt cắt III-III (Tỷ lệ 1/25)."""
+        out_p = Path(output_path)
+        pkg = PktPackage.create_from_template(
+            output_path=out_p,
+            subassembly_name="TuongChan_Cat_III_III",
+            description="Tường chắn và gờ chắn bê tông trọng lực móng bản mặt cắt III-III (Tỷ lệ 1/25)",
+            civil_version=CivilVersion(version),
+        )
+        engine = FlowchartEngine(pkg.get_xaml_text())
+
+        params = [
+            ("EG", ParameterCategory.TARGET, ParameterDataType.SURFACE_TARGET, "-9999", "Bề mặt tự nhiên (EG)", "Địa hình hiện trạng tiếp xúc"),
+            ("Target_Elevation", ParameterCategory.TARGET, ParameterDataType.ELEVATION_TARGET, "0.0", "Cao độ đỉnh tường", "Target khống chế cao độ đỉnh"),
+            ("Target_Offset", ParameterCategory.TARGET, ParameterDataType.OFFSET_TARGET, "0.0", "Offset mép tường", "Target khống chế vị trí mép tim"),
+            ("Side", ParameterCategory.INPUT, ParameterDataType.SIDE, "Right", "Phía", "Phía bố trí cấu kiện"),
+            ("H_Than", ParameterCategory.INPUT, ParameterDataType.DOUBLE, "0.80", "Chiều cao thân H (m)", "Chiều cao thân tường từ đỉnh xuống móng"),
+            ("B_Dinh", ParameterCategory.INPUT, ParameterDataType.DOUBLE, "0.30", "Bề rộng đỉnh thân (m)", "Bề rộng đỉnh trước khi vát"),
+            ("B_Day_Than", ParameterCategory.INPUT, ParameterDataType.DOUBLE, "0.35", "Bề rộng chân thân (m)", "Bề rộng chân thân tiếp giáp móng"),
+            ("Vat_Dinh", ParameterCategory.INPUT, ParameterDataType.DOUBLE, "0.07", "Kích thước vát góc đỉnh (m)", "Chiều dài cạnh vát góc trên phải"),
+            ("B_Mui_Trai", ParameterCategory.INPUT, ParameterDataType.DOUBLE, "0.20", "Độ vươn mũi móng trái (m)", "Khoảng cách từ mép móng trái vào thân"),
+            ("B_Got_Phai", ParameterCategory.INPUT, ParameterDataType.DOUBLE, "0.45", "Độ vươn gót móng phải (m)", "Khoảng cách từ chân thân ra mép móng phải"),
+            ("H_Mong", ParameterCategory.INPUT, ParameterDataType.DOUBLE, "0.30", "Chiều dày bản móng (m)", "Chiều dày bản móng BTCT M300"),
+            ("H_Lot", ParameterCategory.INPUT, ParameterDataType.DOUBLE, "0.10", "Chiều dày BT lót (m)", "Chiều dày lớp đệm lót M150"),
+            ("B_Lot_Ext", ParameterCategory.INPUT, ParameterDataType.DOUBLE, "0.00", "Mở rộng lót mỗi bên (m)", "Độ vươn lớp lót ra ngoài móng"),
+        ]
+        for pname, cat, dt, def_val, disp, desc in params:
+            ParameterBuilder.add_parameter(engine, pname, cat, dt, def_val, disp, desc)
+            pkg.sync_parameter_to_atc(pname, dt.value, def_val, disp, desc)
+
+        # Biến bề rộng phẳng đỉnh tường = B_Dinh - Vat_Dinh
+        LogicBuilder.add_define_variable(engine, "B_Top_Phang", "Double", "0.0")
+        LogicBuilder.add_set_variable_value(engine, "B_Top_Phang", "B_Dinh - Vat_Dinh", "Double")
+
+        # --------------------------------------------------------------------
+        # 1. THÂN TƯỜNG (BT M300 đá 1x2): P1, P2, P3, P5, P4
+        # --------------------------------------------------------------------
+        # P1: Đỉnh mép trái (Origin 0,0)
+        GeometryBuilder.add_point_and_link(engine, "P1", "Origin", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "0.0", point_codes_str='"Crown", "Top"')
+        # P2: Đỉnh mép trước khi vát góc
+        GeometryBuilder.add_point_and_link(engine, "P2", "P1", PointGeometryType.DELTA_X_DELTA_Y, "B_Top_Phang", "0.0", point_codes_str='"Top"', add_link=True, link_name="L1", link_codes_str='"Top"')
+        # P3: Mép vát góc 7cm nghiêng 45 độ
+        GeometryBuilder.add_point_and_link(engine, "P3", "P2", PointGeometryType.DELTA_X_DELTA_Y, "Vat_Dinh", "-Vat_Dinh", point_codes_str='"Chamfer"', add_link=True, link_name="L2", link_codes_str='"Top", "Chamfer"')
+        # P4: Chân thân tường bên trái (hạ H_Than)
+        GeometryBuilder.add_point_and_link(engine, "P4", "P1", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-H_Than", point_codes_str='"StemBase_L"')
+        # P5: Chân thân tường bên phải (rộng B_Day_Than từ P4)
+        GeometryBuilder.add_point_and_link(engine, "P5", "P4", PointGeometryType.DELTA_X_DELTA_Y, "B_Day_Than", "0.0", point_codes_str='"StemBase_R"')
+        # Link vách phải L3, link chân thân L4, link vách đứng trái L5
+        GeometryBuilder.add_link(engine, "L3", "P3", "P5", link_codes_str='"WallStem", "Right"')
+        GeometryBuilder.add_link(engine, "L4", "P4", "P5", link_codes_str='"StemBase"')
+        GeometryBuilder.add_link(engine, "L5", "P1", "P4", link_codes_str='"WallStem", "Left"')
+        # Shape S1 Thân tường
+        GeometryBuilder.add_shape(engine, "S1", ["L1", "L2", "L3", "L4", "L5"], shape_codes_str='"BT_M300", "ThanTuong"')
+
+        # --------------------------------------------------------------------
+        # 2. BẢN MÓNG (BTCT M300 đá 1x2): P6, P4, P5, P7, P9, P8
+        # --------------------------------------------------------------------
+        # P6: Mép trên mũi móng trái (vươn B_Mui_Trai từ P4)
+        GeometryBuilder.add_point_and_link(engine, "P6", "P4", PointGeometryType.DELTA_X_DELTA_Y, "-B_Mui_Trai", "0.0", point_codes_str='"FootingTop_L"')
+        GeometryBuilder.add_link(engine, "L6", "P6", "P4", link_codes_str='"Top", "Footing"')
+        # P7: Mép trên gót móng phải (vươn B_Got_Phai từ P5)
+        GeometryBuilder.add_point_and_link(engine, "P7", "P5", PointGeometryType.DELTA_X_DELTA_Y, "B_Got_Phai", "0.0", point_codes_str='"FootingTop_R"')
+        GeometryBuilder.add_link(engine, "L7", "P5", "P7", link_codes_str='"Top", "Footing"')
+        # P8: Mép dưới móng trái (hạ H_Mong từ P6)
+        GeometryBuilder.add_point_and_link(engine, "P8", "P6", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-H_Mong", point_codes_str='"FootingBottom_L"')
+        GeometryBuilder.add_link(engine, "L8", "P6", "P8", link_codes_str='"Footing"')
+        # P9: Mép dưới móng phải (hạ H_Mong từ P7)
+        GeometryBuilder.add_point_and_link(engine, "P9", "P7", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-H_Mong", point_codes_str='"FootingBottom_R"')
+        GeometryBuilder.add_link(engine, "L9", "P7", "P9", link_codes_str='"Footing"')
+        # Link L10 đáy bản móng
+        GeometryBuilder.add_link(engine, "L10", "P8", "P9", link_codes_str='"FootingBottom"')
+        # Shape S2 Bản móng
+        GeometryBuilder.add_shape(engine, "S2", ["L6", "L4", "L7", "L9", "L10", "L8"], shape_codes_str='"BTCT_M300", "BanMong"')
+
+        # --------------------------------------------------------------------
+        # 3. BÊ TÔNG LÓT (BT M150) & GIẤY DẦU LÓT MÓNG: P8, P9, P11, P10
+        # --------------------------------------------------------------------
+        # P10: Đáy lót trái (hạ H_Lot, vươn B_Lot_Ext)
+        GeometryBuilder.add_point_and_link(engine, "P10", "P8", PointGeometryType.DELTA_X_DELTA_Y, "-B_Lot_Ext", "-H_Lot", point_codes_str='"BeddingBottom_L"')
+        # P11: Đáy lót phải (hạ H_Lot, vươn B_Lot_Ext)
+        GeometryBuilder.add_point_and_link(engine, "P11", "P9", PointGeometryType.DELTA_X_DELTA_Y, "B_Lot_Ext", "-H_Lot", point_codes_str='"BeddingBottom_R"')
+        # Link L11 lớp giấy dầu lót móng dưới cùng
+        GeometryBuilder.add_link(engine, "L11", "P10", "P11", link_codes_str='"GiayDau", "Membrane", "Datum"')
+        # Link vách lót trái L12 & phải L13
+        GeometryBuilder.add_link(engine, "L12", "P8", "P10", link_codes_str='"BTLot"')
+        GeometryBuilder.add_link(engine, "L13", "P9", "P11", link_codes_str='"BTLot"')
+        # Shape S3 Bê tông lót
+        GeometryBuilder.add_shape(engine, "S3", ["L10", "L13", "L11", "L12"], shape_codes_str='"BT_M150", "BTLot"')
+
+        pkg.set_xaml_text(engine.to_xaml_string())
+        pkg.save()
+        return out_p
+

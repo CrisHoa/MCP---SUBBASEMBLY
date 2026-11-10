@@ -1,5 +1,5 @@
 """
-Unit test kiểm thử toàn diện 100% bộ 8 Cấu kiện Native XAML thay thế Visual Infra.
+Unit test kiểm thử toàn diện 100% bộ 9 Cấu kiện Native XAML thay thế Visual Infra và thiết kế mở rộng.
 Kiểm định tự động qua 3 Tầng:
   - Tầng 1: Chuẩn gói OPC Package (Content_Types, ATC, CFG, PVD, EMD, CDMD, UTF-8 BOM).
   - Tầng 2: Cú pháp WF4 / XAML Semantic.
@@ -18,7 +18,7 @@ def suite_dir(tmp_path_factory):
     return d
 
 
-def test_build_and_validate_all_8_subassemblies(suite_dir: Path):
+def test_build_and_validate_all_9_subassemblies(suite_dir: Path):
     builders = [
         ("01_PhuiDaoCong", NativeSuiteBuilder.build_01_phui_dao_cong),
         ("02_VetHuuCo_DanhCap", NativeSuiteBuilder.build_02_vet_huu_co_danh_cap),
@@ -28,6 +28,7 @@ def test_build_and_validate_all_8_subassemblies(suite_dir: Path):
         ("06_DuongNangCapCaiTao", NativeSuiteBuilder.build_06_duong_nang_cap_cai_tao),
         ("07_KetCauMatDuongMoi", NativeSuiteBuilder.build_07_ket_cau_mat_duong_moi),
         ("08_GiaCoMaiTaluy_GiatCo", NativeSuiteBuilder.build_08_giaco_maitaluy_giatco),
+        ("09_TuongChan_Cat_III_III", NativeSuiteBuilder.build_09_tuong_chan_cat_3_3),
     ]
 
     for name, build_fn in builders:
