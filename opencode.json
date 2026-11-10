@@ -1,0 +1,17 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "sac": {
+      "type": "local",
+      "command": [
+        "C:/Users/Admin/Desktop/MCP - SUBBASEMBLY/.venv/Scripts/python.exe",
+        "-m",
+        "sac_mcp.server"
+      ],
+      "environment": {
+        "PYTHONIOENCODING": "utf-8"
+      },
+      "enabled": true
+    }
+  }
+}

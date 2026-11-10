@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "sac": {
+      "command": "C:/Users/Admin/Desktop/MCP - SUBBASEMBLY/.venv/Scripts/python.exe",
+      "args": ["-m", "sac_mcp.server"],
+      "cwd": "C:/Users/Admin/Desktop/MCP - SUBBASEMBLY",
+      "env": {
+        "PYTHONIOENCODING": "utf-8"
+      }
+    }
+  }
+}

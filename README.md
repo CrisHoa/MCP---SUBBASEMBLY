@@ -193,3 +193,29 @@ MCP - SUBBASEMBLY/
 ```
 
 Server **không ghi file nào khi khởi động**. Thư mục `templates/` chỉ được sinh lại khi chạy `scripts/generate_base_templates.py`.
+
+---
+
+## 6. Dùng Với Claude Code, Antigravity Và OpenCode
+
+Skill `sac-subassembly-design` theo chuẩn mở Agent Skills (`SKILL.md` + frontmatter `name` / `description`),
+nên cả ba công cụ đều đọc được. Mỗi công cụ quét một thư mục khác nhau:
+
+| Công cụ | Skill đọc từ | MCP server `sac` cấu hình ở |
+| :--- | :--- | :--- |
+| Claude Code | `.claude/skills/` | cấu hình MCP của Claude Code |
+| Google Antigravity (IDE / CLI) | `.agents/skills/` | `.agents/mcp_config.json` (workspace) |
+| OpenCode | `.claude/skills/` và `.agents/skills/` | `opencode.json` (gốc dự án) |
+
+- **Bản gốc của skill là `.claude/skills/`.** `.agents/skills/` là bản sao cho Antigravity.
+  Sau khi sửa skill, chạy:
+  ```powershell
+  .venv\Scripts\python.exe scripts\sync_agent_skills.py
+  ```
+  Test `tests/test_skill_mirror.py` sẽ trượt nếu hai bản lệch nhau.
+- **Skill cần MCP server mới dùng được** (nó hướng dẫn gọi 27 tool). Hai file `.agents/mcp_config.json` và
+  `opencode.json` khởi động server bằng `.venv` của dự án qua đường dẫn **tuyệt đối** của máy này
+  (`C:/Users/Admin/Desktop/MCP - SUBBASEMBLY`). Chuyển dự án sang máy / thư mục khác thì sửa lại đường dẫn.
+- Antigravity App (bản desktop, khác IDE / CLI) chưa ghi rõ có đọc cấu hình MCP cấp workspace không;
+  nếu không thấy tool, thêm mục `sac` giống `.agents/mcp_config.json` vào cấu hình MCP toàn cục của App.
+- OpenCode thấy skill ở cả hai thư mục với cùng tên; nội dung giống hệt nên dùng bản nào cũng như nhau.
