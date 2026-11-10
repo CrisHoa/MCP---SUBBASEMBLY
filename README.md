@@ -112,7 +112,11 @@ Khi lỗi, tool trả về JSON `{ "success": false, "error_type", "message", "h
 
 ---
 
-## 4. Danh Sách 15 Công Cụ MCP
+## 4. Danh Sách 27 Công Cụ MCP
+
+Docstring của từng tool là nguồn chính xác nhất về tham số. Quy tắc chung cho các tool tạo đối tượng có tên
+(Point / Link / Shape / Loop / Offset): **tên phải chưa tồn tại**. Nếu cần dùng lại cùng tên ở hai nhánh loại
+trừ nhau của một FlowDecision, truyền `allow_duplicate_name=True`.
 
 | Nhóm | Tool | Chức năng |
 | :--- | :--- | :--- |
@@ -123,14 +127,31 @@ Khi lỗi, tool trả về JSON `{ "success": false, "error_type", "message", "h
 | Tạo | `create_pkt_from_template` | Tạo `.pkt` mới chuẩn 7 file cho Civil 3D 2025 / 2026 / 2027 (ghi đè thì tự lưu `.bak`). |
 | Tạo | `generate_assembly_recipe` | Sinh mặt cắt mẫu `urban_road` / `highway_lane`. |
 | Sửa | `add_parameter` | Thêm Input/Output/Target Parameter; Input được đồng bộ vào `<Params>` của `.atc`. |
-| Sửa | `add_point_and_link` | Thêm Point / AuxPoint (6 kiểu định vị qua MCP) và tự nối Link. |
+| Sửa | `add_point_and_link` | Thêm Point / AuxPoint (6 kiểu định vị qua MCP); truyền `link_name` để tự nối Link từ `from_point`. |
 | Sửa | `add_link` | Nối 2 điểm có sẵn bằng `CreateLink` / `CreateAuxLink`. |
 | Sửa | `add_fillet_arc` | Bo cong góc giữa 2 Link (`FilletArcActivity`); cần `second_link`, tự đặt tên điểm đầu/cuối nếu bỏ trống. |
 | Sửa | `add_loop_geometry` | Vòng lặp hình học `CreateLoop` (giật cơ nhiều tầng). |
 | Sửa | `add_intersection_point` | Giao điểm 2 Link (`LinkIntersection` / `AuxIntersection`). |
 | Sửa | `add_strip_surface` | Bóc hữu cơ theo chiều sâu (`StripSurfaceActivity`) trên bề mặt `surface_target` (mặc định `EG`). |
 | Sửa | `add_shape` | Tạo `CreateShape` từ danh sách Link khép kín. |
-| Sửa | `add_report_message` | Thêm `CustomErrorReportActivity`, có thể kèm điều kiện `FlowDecision`. |
+| Sửa | `add_report_message` | Thêm `CustomErrorReportActivity` (`Informational` / `Warning` / `Error`), có thể kèm điều kiện `FlowDecision`. |
+| Sửa | `add_curve` | Đường cong `CreateCurve` / `CreateAuxCurve`: `ArcGeneral` (cần `center_point`), `Arc3Points` (cần `arc_point`), `ParabolaGeneral` (cần `mid_ordinate_expr`). |
+| Sửa | `add_offset_geometry` | Đường song song `CreateOffset` từ danh sách Link (VD lớp đệm lót). |
+| Sửa | `add_get_mark_point` / `add_set_mark_point` | Đánh dấu điểm để subassembly khác trong Assembly lấy lại (`MarkName`). |
+| Sửa | `add_define_variable` / `add_set_variable` | Biến nội bộ (`Double`, `Integer`, `String`, `YesNo`); chặn tên trùng Parameter / biến / từ khoá VB. |
+| Sửa | `add_set_output_parameter` | Gán giá trị cho Output Parameter đã khai báo. |
+| Sửa | `add_flow_decision` | Rẽ nhánh điều kiện; đặt node vào nhánh bằng `parent_node_id='<id>:True'` / `'<id>:False'`. |
+| Sửa | `update_node` | Đổi thuộc tính / đối số của một node; đổi tên Point / Link sẽ cập nhật mọi tham chiếu (`rename_references`). |
+| Sửa | `remove_node` | Xoá node và nối lại luồng; FlowDecision cần `keep_branch` nếu hai nhánh khác nhau. |
+| Spec | `export_spec` | Xuất subassembly thành spec JSON khai báo (xem [docs/spec_format.md](docs/spec_format.md)). |
+| Spec | `build_from_spec` | Dựng nguyên một file `.pkt` từ spec JSON trong một lần gọi, kiểm định trước khi lưu. |
+
+### Claude Code Skill đi kèm
+
+[.claude/skills/sac-subassembly-design/](.claude/skills/sac-subassembly-design/SKILL.md) hướng dẫn Claude quy trình thiết kế
+subassembly bằng các tool trên, gồm: đọc bản vẽ, đặt tên và chọn kiểu tham số, thứ tự dựng, rẽ nhánh, kiểm định
+và cách sửa theo từng mã lỗi. Các mẫu đã kiểm chứng (làn xe siêu cao, bó vỉa, đào/đắp, giật cơ, tường chắn,
+kết cấu áo đường) nằm trong `reference/patterns.md`.
 
 ---
 
@@ -147,7 +168,8 @@ MCP - SUBBASEMBLY/
 │   ├── update_activity_catalog.py       # Sinh lại native/activity_catalog.json từ DLL của SAC
 │   ├── test_doc_ctor.ps1 / test_load_sac.ps1
 ├── src/sac_mcp/
-│   ├── server.py                        # MCP server (15 tool)
+│   ├── server.py                        # MCP server (23 tool + 4 tool từ tools_ext.py)
+│   ├── tools_ext.py                     # remove_node, update_node, export_spec, build_from_spec
 │   ├── cli.py                           # sac-cli: validate / build / test
 │   ├── paths.py                         # Thư mục xuất (SAC_OUTPUT_DIR)
 │   ├── models/schemas.py                # Pydantic schemas & enums
@@ -158,6 +180,9 @@ MCP - SUBBASEMBLY/
 │   └── core/
 │       ├── validator.py                 # Kiểm định 3 tầng (PktValidator)
 │       ├── semantic_checks.py           # Kiểm tra ngữ nghĩa tĩnh (Tầng 2)
+│       ├── node_editor.py               # Sửa / xoá node, nối lại luồng
+│       ├── spec_builder.py              # export_spec / build_from_spec
+│       ├── sac_enums.py                 # Nhóm EnumType chuẩn SAC (Side, Yes\No, Superelevation)
 │       ├── opc_package.py               # Đọc / ghi an toàn gói .pkt
 │       ├── xaml_engine.py               # Parser, mutator và mô hình đồ thị Flowchart
 │       ├── version_manager.py           # Cấu hình theo phiên bản Civil 3D

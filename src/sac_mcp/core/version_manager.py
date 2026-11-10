@@ -269,7 +269,7 @@ class VersionManager:
         Tạo file <guid>.xaml gốc chuẩn Native WF4 của Autodesk Subassembly Composer
         (tương thích 100% với các file thực tế trong examples/).
         """
-        return """<Activity mc:Ignorable="sads sap" x:Class="Subassembly" this:Subassembly.Side="[new EnumType(0, &quot;Right&quot;, &quot;Side&quot;)]"
+        return """<Activity mc:Ignorable="sads sap sap2010" x:Class="Subassembly" this:Subassembly.Side="[new EnumType(0, &quot;Right&quot;, &quot;Side&quot;)]"
  xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
  xmlns:asa="clr-namespace:Autodesk.SubassemblyComposer.API;assembly=Subassembly.API"
  xmlns:asa1="clr-namespace:Autodesk.SubassemblyComposer.ActivityLibrary;assembly=Subassembly.ActivityLibrary"

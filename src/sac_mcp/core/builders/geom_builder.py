@@ -917,11 +917,39 @@ class GeometryBuilder:
         is_auxiliary: bool = False,
         parent_node_id: Optional[str] = None,
         target_container: Optional[etree._Element] = None,
+        arc_point: Optional[str] = None,
+        mid_ordinate_expr: Optional[str] = None,
     ) -> dict:
-        """Tạo đối tượng CreateCurve hoặc CreateAuxCurve chuẩn Native SAC."""
+        """
+        Tạo đối tượng CreateCurve hoặc CreateAuxCurve chuẩn Native SAC.
+
+        Đối số phụ trong <CreateCurve.Arguments> phụ thuộc CreationType (theo DLL
+        Subassembly.ActivityLibrary: lớp ArcGeneral / Arc3Points / ParabolaGeneral):
+          - ArcGeneral      -> x:Key="CenterPoint" (x:String, tên Point tâm cung)
+          - Arc3Points      -> x:Key="ArcPoint2"   (x:String, Point thứ 2 nằm trên cung)
+          - ParabolaGeneral -> x:Key="MidOrdinate" (x:Double, tung độ giữa)
+        Thiếu đối số này SAC báo lỗi lúc chạy (ErrorHandling_<Type>_<Arg>) nên builder ghi cảnh báo.
+        """
         link_number = link_number.strip()
         start_point = start_point.strip()
         end_point = end_point.strip()
+        if creation_type not in ("ArcGeneral", "Arc3Points", "ParabolaGeneral"):
+            raise ValueError(
+                f"CreationType '{creation_type}' không hợp lệ (chỉ ArcGeneral, Arc3Points, ParabolaGeneral)."
+            )
+        # Đối số theo kiểu cung: (x:Key, x:TypeArguments, giá trị)
+        if creation_type == "ArcGeneral":
+            curve_arg = ("CenterPoint", "x:String", (center_point or "").strip())
+        elif creation_type == "Arc3Points":
+            curve_arg = ("ArcPoint2", "x:String", (arc_point or center_point or "").strip())
+        else:
+            mo = "" if mid_ordinate_expr is None else str(mid_ordinate_expr).strip()
+            curve_arg = ("MidOrdinate", "x:Double", format_arg_expr(mo) if mo else "")
+        if not curve_arg[2]:
+            engine.warnings.append(
+                f"Curve '{link_number}' ({creation_type}) chưa có đối số '{curve_arg[0]}': "
+                "SAC sẽ báo lỗi khi chạy. Hãy bổ sung."
+            )
         act_id = engine.next_activity_id()
         tag_name = "CreateAuxCurve" if is_auxiliary else "CreateCurve"
 
@@ -952,13 +980,13 @@ class GeometryBuilder:
         curve_el = etree.Element(engine.qn("asa2", tag_name), attrib=curve_attrs)
 
         args_el = etree.SubElement(curve_el, engine.qn("asa2", f"{tag_name}.Arguments"))
-        if center_point:
+        if curve_arg[2]:
             cp_arg = etree.SubElement(
                 args_el,
                 engine.qn("wf", "InArgument"),
-                attrib={engine.qn("x", "TypeArguments"): "x:String", engine.qn("x", "Key"): "CenterPoint"},
+                attrib={engine.qn("x", "TypeArguments"): curve_arg[1], engine.qn("x", "Key"): curve_arg[0]},
             )
-            cp_arg.text = center_point.strip()
+            cp_arg.text = curve_arg[2]
 
         if codes_list:
             codes_container = etree.SubElement(curve_el, engine.qn("asa2", f"{tag_name}.LinkCodes"))
@@ -987,6 +1015,7 @@ class GeometryBuilder:
                 "start_point": start_point,
                 "end_point": end_point,
                 "creation_type": creation_type,
+            "curve_argument": {curve_arg[0]: curve_arg[2] or None},
             }
 
         ref_id = engine.next_reference_id()
@@ -1021,6 +1050,7 @@ class GeometryBuilder:
             "start_point": start_point,
             "end_point": end_point,
             "creation_type": creation_type,
+            "curve_argument": {curve_arg[0]: curve_arg[2] or None},
             "view_location": f"{x_pos},{y_pos}",
         }
 
@@ -1140,21 +1170,31 @@ class GeometryBuilder:
         is_auxiliary: bool = False,
         parent_node_id: Optional[str] = None,
         target_container: Optional[etree._Element] = None,
+        prev_offset_expr: str = "0",
+        prev_delta_elevation_expr: str = "0",
     ) -> dict:
-        """Tạo Activity GetMarkPointActivity hoặc GetAuxMarkPointActivity."""
+        """
+        Tạo Activity GetMarkPointActivity hoặc GetAuxMarkPointActivity.
+        Đối chiếu mẫu Autodesk LaneWithMarkedPoint.pkt: PrevOffset / PrevDeltaElevation (x:Double, bắt buộc)
+        là tọa độ dùng khi Preview trong SAC (chưa có Mark Point thật), PrevFromPoint="{x:Null}".
+        MarkName là InArgument<String>: tên cố định (VD 'EdgePoint') hoặc biểu thức [BienChuoi].
+        """
         point_number = point_number.strip()
         mark_name = mark_name.strip()
+        if not point_number or not mark_name:
+            raise ValueError("point_number và mark_name không được để trống.")
         act_id = engine.next_activity_id()
         tag_name = "GetAuxMarkPointActivity" if is_auxiliary else "GetMarkPointActivity"
 
         mp_attrs = {
             "ActivityId": act_id,
-            "DisplayName": f"{point_number}({mark_name})",
+            "DisplayName": point_number,
             "Geometry": "[Geometry]",
             "MarkName": mark_name,
             "PointNumber": point_number,
-            "PrevOffset": "0",
-            "PrevDeltaElevation": "0",
+            "PrevFromPoint": "{x:Null}",
+            "PrevOffset": format_arg_expr(prev_offset_expr),
+            "PrevDeltaElevation": format_arg_expr(prev_delta_elevation_expr),
             "ShowErrors": "True",
             "Side": "[Side]",
             "SubassemblyErrorCenter": "[SubassemblyErrorCenter]",

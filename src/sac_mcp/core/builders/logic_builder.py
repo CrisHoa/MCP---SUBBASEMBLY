@@ -5,11 +5,102 @@ vào Flowchart.xaml của Subassembly Composer.
 
 from __future__ import annotations
 
+import re
 from typing import List, Optional
 from lxml import etree
 
 from sac_mcp.core.xaml_engine import FlowchartEngine
 from sac_mcp.models.schemas import ReportMessageType
+
+# Kiểu biến nội bộ (InternalVariableDefine.VariableType) mà SAC GUI ghi ra -> x:TypeArguments.
+# Đối chiếu các gói .pkt mẫu của Autodesk (C3D 2024-2027): chỉ gặp Double / Integer / String / Yes\No.
+SAC_VARIABLE_TYPES = {
+    "Double": ("Double", "x:Double"),
+    "Integer": ("Integer", "x:Int32"),
+    "Int32": ("Integer", "x:Int32"),
+    "String": ("String", "x:String"),
+    "YesNo": ("Yes\\No", "asw:EnumType"),
+    "Yes\\No": ("Yes\\No", "asw:EnumType"),
+}
+
+# Kiểu dùng cho SetVariableValue / SetOutputParameterValue (thêm Boolean, Slope, Grade cho Output Parameter).
+CLR_TYPE_MAP = {
+    "Double": "x:Double",
+    "Integer": "x:Int32",
+    "Int32": "x:Int32",
+    "String": "x:String",
+    "Boolean": "x:Boolean",
+    "YesNo": "asw:EnumType",
+    "Yes\\No": "asw:EnumType",
+    "Slope": "asw:Slope",
+    "Grade": "asw:Grade",
+}
+
+
+# Từ khóa dành riêng của VB.NET (không phân biệt hoa thường) - không dùng làm tên biến.
+VB_RESERVED_WORDS = frozenset(
+    w.lower()
+    for w in """
+    AddHandler AddressOf Alias And AndAlso As Boolean ByRef Byte ByVal Call Case Catch CBool CByte CChar
+    CDate CDbl CDec Char CInt Class CLng CObj Const Continue CSByte CShort CSng CStr CType CUInt CULng
+    CUShort Date Decimal Declare Default Delegate Dim DirectCast Do Double Each Else ElseIf End EndIf
+    Enum Erase Error Event Exit False Finally For Friend Function Get GetType GetXMLNamespace Global
+    GoSub GoTo Handles If Implements Imports In Inherits Integer Interface Is IsNot Let Lib Like Long
+    Loop Me Mod Module MustInherit MustOverride MyBase MyClass Namespace Narrowing New Next Not Nothing
+    NotInheritable NotOverridable Object Of On Operator Option Optional Or OrElse Out Overloads
+    Overridable Overrides ParamArray Partial Private Property Protected Public RaiseEvent ReadOnly
+    ReDim REM RemoveHandler Resume Return SByte Select Set Shadows Shared Short Single Static Step Stop
+    String Structure Sub SyncLock Then Throw To True Try TryCast TypeOf UInteger ULong UShort Using
+    Variant Wend When While Widening With WithEvents WriteOnly Xor
+    """.split()
+)
+
+
+def check_identifier(name: str, kind: str = "biến") -> str:
+    """Tên định danh VB hợp lệ: bắt đầu bằng chữ cái, chỉ chữ/số/'_', không trùng từ khóa VB."""
+    n = (name or "").strip()
+    if not re.match(r"^[A-Za-z][A-Za-z0-9_]*$", n):
+        raise ValueError(f"Tên {kind} '{name}' không hợp lệ: phải bắt đầu bằng chữ cái, chỉ gồm chữ, số và '_'.")
+    if n.lower() in VB_RESERVED_WORDS:
+        raise ValueError(f"Tên {kind} '{n}' trùng từ khóa VB.NET dành riêng. Hãy đặt tên khác (VD: 'Var_{n}').")
+    return n
+
+
+def _bracket(expr: str) -> str:
+    """Bọc biểu thức VB trong [...] như SAC GUI (kể cả hằng số)."""
+    s = str(expr).strip()
+    if not s:
+        raise ValueError("Biểu thức giá trị không được để trống.")
+    return s if (s.startswith("[") and s.endswith("]")) else f"[{s}]"
+
+
+def lookup_declared_type(engine: FlowchartEngine, name: str) -> Optional[str]:
+    """
+    Tìm x:TypeArguments đã khai báo cho tên `name`:
+      - biến nội bộ trong <Flowchart.Variables>/<Variable Name=...>
+      - Parameter trong <x:Members>/<x:Property Name=... Type="OutArgument(x:Double)">
+    Trả về None nếu chưa khai báo.
+    """
+    flowchart = engine.get_flowchart_element()
+    for v in flowchart.xpath("./*[local-name()='Flowchart.Variables']/*[local-name()='Variable' and @Name=$n]", n=name):
+        t = v.get(engine.qn("x", "TypeArguments"))
+        if t:
+            return t
+    for p in engine.root.xpath("./*[local-name()='Members']/*[local-name()='Property' and @Name=$n]", n=name):
+        t = p.get("Type") or ""
+        if "(" in t and t.endswith(")"):
+            return t[t.index("(") + 1 : -1]
+    return None
+
+
+def _resolve_clr_type(engine: FlowchartEngine, name: str, type_name: Optional[str]) -> str:
+    """Kiểu tường minh nếu có, ngược lại suy ra từ khai báo; mặc định x:Double."""
+    if type_name:
+        key = type_name.strip()
+        if key not in CLR_TYPE_MAP:
+            raise ValueError(f"Kiểu '{type_name}' không hỗ trợ. Chọn một trong: {', '.join(CLR_TYPE_MAP)}.")
+        return CLR_TYPE_MAP[key]
+    return lookup_declared_type(engine, name) or "x:Double"
 
 
 class LogicBuilder:
@@ -174,31 +265,32 @@ class LogicBuilder:
         parent_node_id: Optional[str] = None,
         target_container: Optional[etree._Element] = None,
     ) -> dict:
-        """Tạo Activity InternalVariableDefine chuẩn Native SAC."""
-        variable_name = variable_name.strip()
+        """
+        Tạo Activity InternalVariableDefine chuẩn Native SAC.
+        DefaultValue luôn được bọc [...] như SAC GUI (biểu thức trần như 'P1.X*2' sẽ bị
+        WF4 hiểu là hằng chuỗi và báo 'Input string was not in a correct format').
+        """
+        variable_name = check_identifier(variable_name, "biến")
+        vt_key = str(variable_type).strip()
+        if vt_key not in SAC_VARIABLE_TYPES:
+            raise ValueError(
+                f"VariableType '{variable_type}' không hợp lệ. SAC chỉ hỗ trợ: Double, Integer, String, YesNo."
+            )
+        sac_type, clr_type = SAC_VARIABLE_TYPES[vt_key]
         act_id = engine.next_activity_id()
-
-        # Ánh xạ kiểu biến CLR
-        type_map = {
-            "Double": "x:Double",
-            "Int32": "x:Int32",
-            "Integer": "x:Int32",
-            "String": "x:String",
-            "Boolean": "x:Boolean",
-        }
-        clr_type = type_map.get(variable_type, "x:Double")
 
         # Đăng ký biến vào <Flowchart.Variables>
         engine.add_flowchart_variable(name=variable_name, type_arguments=clr_type)
 
         var_attrs = {
             "ActivityId": act_id,
-            "DisplayName": f"Define {variable_name}",
+            "DisplayName": f"{variable_name} <{sac_type}>",
+            "OldVariableName": "",
             "ShowErrors": "True",
             "SubassemblyErrorCenter": "[SubassemblyErrorCenter]",
             "SubassemblyRunMode": "[SubassemblyRunMode]",
             "VariableName": variable_name,
-            "VariableType": variable_type,
+            "VariableType": sac_type,
             engine.qn("sap", "VirtualizedContainerService.HintSize"): "200,22.4",
         }
 
@@ -210,7 +302,7 @@ class LogicBuilder:
             engine.qn("wf", "InArgument"),
             attrib={engine.qn("x", "TypeArguments"): clr_type},
         )
-        in_arg.text = str(default_value_expr).strip()
+        in_arg.text = _bracket(default_value_expr)
 
         # Variable OutArgument [VariableName]
         var_slot = etree.SubElement(var_el, engine.qn("asa2", "InternalVariableDefine.Variable"))
@@ -226,7 +318,7 @@ class LogicBuilder:
             return {
                 "reference_id": None,
                 "variable_name": variable_name,
-                "variable_type": variable_type,
+                "variable_type": sac_type,
             }
 
         ref_id = engine.next_reference_id()
@@ -258,7 +350,9 @@ class LogicBuilder:
             "reference_id": ref_id,
             "linked_from_reference_id": linked_from or "Flowchart.StartNode",
             "variable_name": variable_name,
-            "variable_type": variable_type,
+            "variable_type": sac_type,
+            "clr_type": clr_type,
+            "default_value": in_arg.text,
             "view_location": f"{x_pos},{y_pos}",
         }
 
@@ -268,26 +362,21 @@ class LogicBuilder:
         engine: FlowchartEngine,
         variable_name: str,
         value_expr: str,
-        variable_type: str = "Double",
+        variable_type: Optional[str] = "Double",
         parent_node_id: Optional[str] = None,
         target_container: Optional[etree._Element] = None,
     ) -> dict:
-        """Tạo Activity SetVariableValue chuẩn Native SAC."""
+        """
+        Tạo Activity SetVariableValue chuẩn Native SAC.
+        variable_type=None: tự suy ra kiểu từ khai báo <Flowchart.Variables> (mặc định Double).
+        """
         variable_name = variable_name.strip()
+        clr_type = _resolve_clr_type(engine, variable_name, variable_type)
         act_id = engine.next_activity_id()
-
-        type_map = {
-            "Double": "x:Double",
-            "Int32": "x:Int32",
-            "Integer": "x:Int32",
-            "String": "x:String",
-            "Boolean": "x:Boolean",
-        }
-        clr_type = type_map.get(variable_type, "x:Double")
 
         set_attrs = {
             "ActivityId": act_id,
-            "DisplayName": f"Set {variable_name}",
+            "DisplayName": f"{variable_name} = {str(value_expr).strip().strip('[]')}"[:60],
             "ShowErrors": "True",
             "SubassemblyErrorCenter": "[SubassemblyErrorCenter]",
             "SubassemblyRunMode": "[SubassemblyRunMode]",
@@ -310,8 +399,7 @@ class LogicBuilder:
             engine.qn("wf", "InArgument"),
             attrib={engine.qn("x", "TypeArguments"): clr_type},
         )
-        s_val = str(value_expr).strip()
-        in_arg.text = s_val if (s_val.startswith("[") and s_val.endswith("]")) else f"[{s_val}]"
+        in_arg.text = _bracket(value_expr)
 
         if target_container is not None:
             target_container.append(set_el)
@@ -351,6 +439,7 @@ class LogicBuilder:
             "linked_from_reference_id": linked_from or "Flowchart.StartNode",
             "variable_name": variable_name,
             "value_expr": value_expr,
+            "clr_type": clr_type,
             "view_location": f"{x_pos},{y_pos}",
         }
 
@@ -360,26 +449,22 @@ class LogicBuilder:
         engine: FlowchartEngine,
         parameter_name: str,
         value_expr: str,
-        parameter_type: str = "Double",
+        parameter_type: Optional[str] = "Double",
         parent_node_id: Optional[str] = None,
         target_container: Optional[etree._Element] = None,
     ) -> dict:
-        """Tạo Activity SetOutputParameterValue chuẩn Native SAC."""
+        """
+        Tạo Activity SetOutputParameterValue chuẩn Native SAC.
+        Lưu ý: tên đối số trong DLL gốc là 'OutputParammeter' (lỗi chính tả của Autodesk) - giữ nguyên.
+        parameter_type=None: tự suy ra kiểu từ <x:Property Type="OutArgument(...)"> (mặc định Double).
+        """
         parameter_name = parameter_name.strip()
+        clr_type = _resolve_clr_type(engine, parameter_name, parameter_type)
         act_id = engine.next_activity_id()
-
-        type_map = {
-            "Double": "x:Double",
-            "Int32": "x:Int32",
-            "Integer": "x:Int32",
-            "String": "x:String",
-            "Boolean": "x:Boolean",
-        }
-        clr_type = type_map.get(parameter_type, "x:Double")
 
         out_attrs = {
             "ActivityId": act_id,
-            "DisplayName": f"Out {parameter_name}",
+            "DisplayName": f"{parameter_name} = {str(value_expr).strip().strip('[]')}"[:60],
             "ShowErrors": "True",
             "SubassemblyErrorCenter": "[SubassemblyErrorCenter]",
             "SubassemblyRunMode": "[SubassemblyRunMode]",
@@ -402,8 +487,7 @@ class LogicBuilder:
             engine.qn("wf", "InArgument"),
             attrib={engine.qn("x", "TypeArguments"): clr_type},
         )
-        s_val = str(value_expr).strip()
-        in_arg.text = s_val if (s_val.startswith("[") and s_val.endswith("]")) else f"[{s_val}]"
+        in_arg.text = _bracket(value_expr)
 
         if target_container is not None:
             target_container.append(out_el)
@@ -443,6 +527,7 @@ class LogicBuilder:
             "linked_from_reference_id": linked_from or "Flowchart.StartNode",
             "parameter_name": parameter_name,
             "value_expr": value_expr,
+            "clr_type": clr_type,
             "view_location": f"{x_pos},{y_pos}",
         }
 
@@ -524,11 +609,19 @@ class LogicBuilder:
         true_ref_id: Optional[str] = None,
         false_ref_id: Optional[str] = None,
         parent_node_id: Optional[str] = None,
-        x: float = 260.0,
-        y: float = 100.0,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
         auto_attach: bool = True,
     ) -> dict:
-        """Tạo khối phân nhánh điều kiện FlowDecision trong Flowchart."""
+        """
+        Tạo khối phân nhánh điều kiện FlowDecision trong Flowchart.
+        x/y = None: tự đặt ngay dưới khối thấp nhất hiện có (không đè lên nhau trong SAC GUI).
+        Kết quả có khóa 'element' (lxml) chỉ dùng nội bộ - không serialize ra JSON.
+        """
+        if x is None or y is None:
+            nx, ny = engine.compute_next_shape_location()
+            x = nx + 60.0 if x is None else x
+            y = ny if y is None else y
         dec_el, ref_id = engine.create_flow_decision(
             condition_expr=condition_expr,
             display_name=display_name,
@@ -545,5 +638,6 @@ class LogicBuilder:
             "display_name": display_name,
             "true_branch": true_ref_id,
             "false_branch": false_ref_id,
+            "view_location": f"{x},{y}",
             "element": dec_el,
         }

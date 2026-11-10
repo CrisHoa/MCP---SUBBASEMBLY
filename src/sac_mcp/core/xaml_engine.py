@@ -81,6 +81,12 @@ class FlowchartEngine:
     def to_xaml_string(self) -> str:
         """Serialize cây XML trở lại chuỗi XAML chuẩn UTF-8 (không kèm XML declaration để WF4 XAML reader đọc được)."""
         etree.indent(self.root, space="  ")
+        # <x:String></x:String> (chuỗi rỗng) phải giữ dạng mở/đóng: dạng tự đóng <x:String/>
+        # bị WF4 hiểu là tạo String bằng constructor mặc định -> SAC báo lỗi
+        # "No default constructor found for type 'System.String'".
+        for el in self.root.iter(self.qn("x", "String")):
+            if el.text is None and len(el) == 0:
+                el.text = ""
         xml_bytes = etree.tostring(
             self.root,
             encoding="utf-8",

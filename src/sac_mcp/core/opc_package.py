@@ -11,14 +11,28 @@ from __future__ import annotations
 import io
 import os
 from pathlib import Path
+import re
 import shutil
 import uuid
 import zipfile
 from typing import Any, Dict, List, Optional
 from lxml import etree
 
+from sac_mcp.core.sac_enums import ENUM_GROUPS, resolve_enum
 from sac_mcp.core.version_manager import VersionManager
 from sac_mcp.models.schemas import CivilVersion, ParameterInfo
+
+
+_ATC_TARGET_TYPES = {"SurfaceTarget", "OffsetTarget", "ElevationTarget"}
+
+
+def _atc_default_value(data_type: str, value: Any) -> str:
+    """Giá trị mặc định dạng SAC ghi vào .atc: số thuần, enum dạng mã số."""
+    raw = str(value).strip()
+    if data_type in ENUM_GROUPS:
+        return str(resolve_enum(data_type, raw)[0])
+    m = re.match(r"^\[new (?:Slope|Grade)\(\s*([-+0-9.eE]+)\s*\)\]$", raw)
+    return m.group(1) if m else raw
 
 
 class PktValidationError(ValueError):
@@ -189,7 +203,16 @@ class PktPackage:
         display_name: str,
         description: str,
     ) -> None:
-        """Đồng bộ Input Parameter mới thêm vào mục <Params> của file <guid>.atc."""
+        """
+        Đồng bộ Parameter vào mục <Params> của file <guid>.atc (bảng thuộc tính Civil 3D đọc khi chèn sub),
+        theo đúng cách Subassembly Composer tự ghi (đối chiếu các file .pkt do SAC lưu trong examples/):
+          - Target (SurfaceTarget / OffsetTarget / ElevationTarget): KHÔNG có trong .atc (gán ở Corridor),
+            nên bỏ qua và xoá nếu trước đó đã ghi nhầm. Tương tự với enum đặt giá trị ẩn (Side = None/-1).
+          - Side / YesNo: DataType="long", giá trị là MÃ SỐ của enum (Right=0, Left=1, Yes=10, No=11)
+            kèm khối <Enum> liệt kê lựa chọn.
+          - Grade: TypeInfo=9; Slope: TypeInfo=10; các số thực khác: TypeInfo=16. Giá trị là số thuần
+            (bỏ vỏ '[new Slope(...)]').
+        """
         atc_name = self.find_atc_filename()
         if not atc_name:
             self.warnings.append(f"Gói không có file .atc nên Parameter '{name}' chưa được đồng bộ sang Civil 3D.")
@@ -202,36 +225,53 @@ class PktPackage:
                 self.warnings.append(f"File '{atc_name}' không có mục <Params>; Parameter '{name}' chưa được đồng bộ.")
                 return
             params_el = params_containers[0]
+            existing = params_el.xpath("./*[local-name()=$n]", n=name)
+
+            # Target, và enum đặt giá trị ẩn (VD Side = None/-1 như 99.pkt) -> SAC không ghi vào .atc
+            skip = data_type in _ATC_TARGET_TYPES or (
+                data_type in ENUM_GROUPS
+                and int(_atc_default_value(data_type, default_value))
+                not in {c for _, c, _ in ENUM_GROUPS[data_type].choices}
+            )
+            if skip:
+                for el in existing:
+                    params_el.remove(el)
+                if existing:
+                    self._commit_atc(atc_name, root)
+                return
 
             # Ánh xạ kiểu dữ liệu sang chuẩn .atc của Civil 3D
-            atc_dt = "double"
-            type_info = "16"
-            if data_type in ("Grade",):
-                atc_dt, type_info = "double", "9"
-            elif data_type in ("Slope",):
-                atc_dt, type_info = "double", "10"
+            atc_dt, type_info = "double", "16"
+            if data_type == "Grade":
+                type_info = "9"
+            elif data_type == "Slope":
+                type_info = "10"
             elif data_type in ("Integer", "Side", "Superelevation", "Boolean", "YesNo"):
-                atc_dt, type_info = "long", "16"
-            elif data_type in ("String",):
-                atc_dt, type_info = "string", "16"
+                atc_dt = "long"
+            elif data_type == "String":
+                atc_dt = "string"
 
-            existing = params_el.xpath(f"./*[local-name()='{name}']")
-            if existing:
-                el = existing[0]
-            else:
-                el = etree.SubElement(params_el, name)
-
+            el = existing[0] if existing else etree.SubElement(params_el, name)
             el.set("DataType", atc_dt)
             el.set("TypeInfo", type_info)
             el.set("DisplayName", display_name or name)
             el.set("Description", description or name)
-            el.text = str(default_value)
+            el.text = _atc_default_value(data_type, default_value)
 
-            self.files[atc_name] = etree.tostring(
-                root, encoding="utf-8", xml_declaration=True, pretty_print=True
-            )
+            group = ENUM_GROUPS.get(data_type)
+            if group:
+                for old in el.xpath("./*[local-name()='Enum']"):
+                    el.remove(old)
+                enum_el = etree.SubElement(el, "Enum")
+                for label, code, display in group.choices:
+                    etree.SubElement(enum_el, label, DisplayName=display).text = str(code)
+
+            self._commit_atc(atc_name, root)
         except Exception as exc:
             self.warnings.append(f"Đồng bộ Parameter '{name}' sang '{atc_name}' thất bại: {exc}")
+
+    def _commit_atc(self, atc_name: str, root: etree._Element) -> None:
+        self.files[atc_name] = etree.tostring(root, encoding="utf-8", xml_declaration=True, pretty_print=True)
 
     def get_metadata(self) -> Dict[str, Any]:
         """Đọc thông tin SubassemblyName, Description, Version từ .atc/.cfg hoặc PacketSettings.xml."""

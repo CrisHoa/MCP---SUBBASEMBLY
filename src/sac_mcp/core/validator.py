@@ -344,10 +344,17 @@ class PktValidator:
 
     @staticmethod
     def _locate_expression(root: etree._Element, expr: str) -> Optional[str]:
+        """
+        Mọi vị trí dùng biểu thức lỗi (WF4 chỉ báo nội dung biểu thức, không báo activity).
+        Cùng một biểu thức có thể xuất hiện ở nhiều nơi (VD [W] trong CreatePoint và Condition của
+        FlowDecision), nên liệt kê tối đa 3 vị trí thay vì đoán một.
+        """
         target = f"[{expr}]"
+        found: List[str] = []
         for el in root.iter(etree.Element):
-            hit = (el.text or "").strip() == target or any(v.strip() == target for v in el.attrib.values())
-            if not hit:
+            attr_hits = [k for k, v in el.attrib.items() if v.strip() == target]
+            text_hit = (el.text or "").strip() == target
+            if not (attr_hits or text_hit):
                 continue
             for anc in [el, *el.iterancestors()]:
                 q = etree.QName(anc)
@@ -355,9 +362,17 @@ class PktValidator:
                 if (_ACTIVITY_LIB_NS in (q.namespace or "") and "." not in ln) or ln in ("FlowDecision", "FlowSwitch"):
                     label = anc.get("DisplayName") or anc.get("PointNumber") or anc.get("LinkNumber") or ""
                     key = el.get("{http://schemas.microsoft.com/winfx/2006/xaml}Key")
+                    if not key and attr_hits:
+                        key = etree.QName(attr_hits[0]).localname
                     arg = f", đối số {key}" if key else ""
-                    return f"{ln} '{label}'{arg}" if label else f"{ln}{arg}"
-        return None
+                    loc = f"{ln} '{label}'{arg}" if label else f"{ln}{arg}"
+                    if loc not in found:
+                        found.append(loc)
+                    break
+        if not found:
+            return None
+        more = f" và {len(found) - 3} chỗ khác" if len(found) > 3 else ""
+        return "; ".join(found[:3]) + more
 
 
 def main() -> None:

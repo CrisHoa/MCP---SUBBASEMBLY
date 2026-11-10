@@ -119,6 +119,25 @@ def test_static_checks_have_no_false_positives_on_examples() -> None:
     assert noisy == {}
 
 
+def test_open_and_resave_keeps_examples_valid(tmp_path: Path) -> None:
+    """Mở rồi lưu lại không đổi gì không được làm hỏng file (VD <x:String></x:String> trong 99.pkt)."""
+    broken = {}
+    for src in sorted(EXAMPLES_DIR.rglob("*.pkt")):
+        dst = tmp_path / src.name
+        dst.write_bytes(src.read_bytes())
+        if not PktValidator.validate_pkt(dst, run_native_test=False).is_valid:
+            continue
+        pkg = PktPackage.open(dst)
+        from sac_mcp.core.xaml_engine import FlowchartEngine
+
+        pkg.set_xaml_text(FlowchartEngine(pkg.get_xaml_text()).to_xaml_string())
+        pkg.save()
+        rep = PktValidator.validate_pkt(dst)
+        if not rep.is_valid:
+            broken[src.name] = [i.message for i in rep.issues if i.severity == "ERROR"]
+    assert broken == {}
+
+
 # ----------------------------------------------------------------------------
 # Tầng 3: DLL gốc của Subassembly Composer
 # ----------------------------------------------------------------------------

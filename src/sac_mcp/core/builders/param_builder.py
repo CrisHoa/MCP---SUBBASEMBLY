@@ -8,6 +8,7 @@ import re
 from typing import Dict
 from lxml import etree
 
+from sac_mcp.core.sac_enums import ENUM_GROUPS, enum_xaml_default
 from sac_mcp.core.xaml_engine import FlowchartEngine
 from sac_mcp.models.schemas import ParameterCategory, ParameterDataType
 
@@ -21,7 +22,8 @@ XAML_TYPE_MAP: Dict[ParameterDataType, str] = {
     ParameterDataType.GRADE: "asw:Grade",
     ParameterDataType.SLOPE: "asw:Slope",
     ParameterDataType.SIDE: "asw:EnumType",
-    ParameterDataType.SUPERELEVATION: "asw:CrossSegmentType",
+    # SAC lưu tham số Superelevation dưới dạng EnumType nhóm "Superelevation" (xem core/sac_enums.py)
+    ParameterDataType.SUPERELEVATION: "asw:EnumType",
     ParameterDataType.SUPERELEVATION_AXIS_OF_ROTATION: "asw:CrossSegmentType",
     ParameterDataType.SLOPE_DIRECTION: "asw:SlopeDirection",
     ParameterDataType.POTENTIAL_PIVOT: "asw:PotentialPivot",
@@ -134,9 +136,10 @@ class ParameterBuilder:
             elif data_type == ParameterDataType.ELEVATION_TARGET:
                 if not def_str.startswith("[new PreviewElevationTarget"):
                     def_str = f'[new PreviewElevationTarget("{param_name}", True, 0)]'
-            elif data_type in (ParameterDataType.SIDE, ParameterDataType.YES_NO):
-                if not def_str.startswith("[new EnumType"):
-                    def_str = f'[new EnumType(0, "{def_str}", "{param_name}")]'
+            elif data_type.value in ENUM_GROUPS:
+                # Mã số + nhóm đúng như SAC ghi: Side Left=1/Right=0, Yes\No Yes=10/No=11,
+                # Superelevation None=-1, LeftInsideLane=20 ... RightOutsideShoulder=27
+                def_str = enum_xaml_default(data_type.value, def_str)
 
             engine.root.set(default_attr_qname, def_str)
 

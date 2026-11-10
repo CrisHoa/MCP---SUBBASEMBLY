@@ -30,7 +30,8 @@ _XREF_ATTR_RE = re.compile(r"\{x:Reference\s+([^}\s]+)\s*\}")
 
 # Thuộc tính định nghĩa tên Point / Link
 _POINT_DEF_ATTRS = ("PointNumber", "StartPointName", "EndPointName")
-_LINK_DEF_ATTRS = ("LinkNumber", "LoopNumber")
+# OffsetNumber: CreateOffset tạo đối tượng tham chiếu được như link (VD FromPoint="O1.EndPoint")
+_LINK_DEF_ATTRS = ("LinkNumber", "LoopNumber", "OffsetNumber")
 # Thuộc tính tham chiếu tới Point / Link đã có
 _POINT_REF_ATTRS = ("FromPoint", "StartPoint", "EndPoint")
 _LINK_REF_ATTRS = ("FirstLink", "SecondLink")

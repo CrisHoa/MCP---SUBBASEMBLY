@@ -65,106 +65,66 @@ def create_urban_road_assembly(
         ParameterBuilder.add_parameter(engine, pname, cat, dt, def_val, disp, desc)
         pkg.sync_parameter_to_atc(pname, dt.value, def_val, disp, desc)
 
-    # 2. Dựng hình học áo đường mặt trên P1 (Tim) -> P2 (Mép làn)
+    # 2. Mặt trên áo đường P1 (Tim) -> P2 (Mép làn), Link L1
     GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P1",
-        from_point="Origin",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y,
-        param_1_expr="0.0",
-        param_2_expr="0.0",
-        point_codes_str='"Crown"',
-        add_link=False,
+        engine=engine, point_code="P1", from_point="Origin",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="0.0",
+        point_codes_str='"Crown"', add_link=False,
     )
     GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P2",
-        from_point="P1",
-        point_type=PointGeometryType.SLOPE_DELTA_X,
-        param_1_expr="i_lan",
-        param_2_expr="B_lan",
-        point_codes_str='"Mep_pxc"',
-        add_link=True,
-        link_name="L1",
-        link_codes_str='"Top", "pxc"',
+        engine=engine, point_code="P2", from_point="P1",
+        point_type=PointGeometryType.SLOPE_DELTA_X, param_1_expr="i_lan", param_2_expr="B_lan",
+        point_codes_str='"Mep_pxc"', add_link=True, link_name="L1", link_codes_str='"Top", "pxc"',
     )
 
-    # Đáy lớp 1 Pave1 (P3, P4)
+    # Kết cấu áo đường 4 lớp: mỗi lớp là tứ giác khép kín
+    #   cạnh tim (AutoLink tim_trên -> tim_dưới), Link đáy song song mặt (AutoLink tim_dưới -> mép_dưới),
+    #   cạnh mép (add_link mép_trên -> mép_dưới, AutoLink đi sai chiều nên tạo riêng).
+    layers = [
+        ("Pave1", '"Pave1"'),
+        ("Pave2", '"Pave2"'),
+        ("Base", '"Base"'),
+        ("SubBase", '"SubBase", "Datum"'),
+    ]
+    top_tim, top_mep, top_link = "P1", "P2", "L1"
+    for idx, (thk, codes) in enumerate(layers):
+        p_tim, p_mep = f"P{2 * idx + 3}", f"P{2 * idx + 4}"           # P3/P4 ... P9/P10
+        l_day, l_mep, l_tim = (f"L{3 * idx + 2}", f"L{3 * idx + 3}", f"L{3 * idx + 4}")  # L2..L13
+        GeometryBuilder.add_point_and_link(
+            engine=engine, point_code=p_tim, from_point=top_tim,
+            point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr=f"-{thk}",
+            add_link=True, link_name=l_tim, link_codes_str='"Crown"',
+        )
+        GeometryBuilder.add_point_and_link(
+            engine=engine, point_code=p_mep, from_point=p_tim,
+            point_type=PointGeometryType.SLOPE_DELTA_X, param_1_expr="i_lan", param_2_expr="B_lan",
+            add_link=True, link_name=l_day, link_codes_str=codes,
+        )
+        GeometryBuilder.add_link(engine=engine, link_name=l_mep, start_point=top_mep, end_point=p_mep, link_codes_str='"Pave"')
+        # Vòng: tim_trên -> mép_trên -> mép_dưới -> tim_dưới -> tim_trên
+        GeometryBuilder.add_shape(
+            engine=engine, shape_code=f"S{idx + 1}",
+            link_names=[top_link, l_mep, l_day, l_tim], shape_codes_str=f'"{thk}"',
+        )
+        top_tim, top_mep, top_link = p_tim, p_mep, l_day
+
+    # 3. Bó vỉa từ mép làn P2: P11 (đỉnh gờ), P12 (đỉnh bó vỉa)
     GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P3",
-        from_point="P1",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y,
-        param_1_expr="0.0",
-        param_2_expr="-Pave1",
-        add_link=False,
+        engine=engine, point_code="P11", from_point="P2",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.0", param_2_expr="0.15",
+        point_codes_str='"BV1"', add_link=True, link_name="L14", link_codes_str='"Top", "Link_BV"',
     )
     GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P4",
-        from_point="P3",
-        point_type=PointGeometryType.SLOPE_DELTA_X,
-        param_1_expr="i_lan",
-        param_2_expr="B_lan",
-        add_link=True,
-        link_name="L2",
-    )
-    # Khép link mép L3 và link tim L4
-    GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P2",
-        from_point="P4",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y,
-        param_1_expr="0.0",
-        param_2_expr="Pave1",
-        add_link=True,
-        link_name="L3",
-    )
-    GeometryBuilder.add_shape(
-        engine=engine,
-        shape_code="S1",
-        link_names=["L1", "L3", "L2"],
-        shape_codes_str='"Pave1"',
+        engine=engine, point_code="P12", from_point="P11",
+        point_type=PointGeometryType.DELTA_X_DELTA_Y, param_1_expr="0.18", param_2_expr="0.0",
+        point_codes_str='"BV2"', add_link=True, link_name="L15", link_codes_str='"Top", "Link_BV"',
     )
 
-    # 3. Dựng Bó vỉa (P5 gờ mép, P6 đỉnh bó vỉa, bo cong mép L_BV)
+    # 4. Vỉa hè P13 (từ P12 ra mép ngoài)
     GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P5",
-        from_point="P2",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y,
-        param_1_expr="0.0",
-        param_2_expr="0.15",
-        point_codes_str='"BV1"',
-        add_link=True,
-        link_name="L4",
-        link_codes_str='"Top", "Link_BV"',
-    )
-    GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P6",
-        from_point="P5",
-        point_type=PointGeometryType.DELTA_X_DELTA_Y,
-        param_1_expr="0.18",
-        param_2_expr="0.0",
-        point_codes_str='"BV2"',
-        add_link=True,
-        link_name="L5",
-        link_codes_str='"Top", "Link_BV"',
-    )
-
-    # 4. Dựng Vỉa hè P7 (từ P6 ra mép ngoài)
-    GeometryBuilder.add_point_and_link(
-        engine=engine,
-        point_code="P7",
-        from_point="P6",
-        point_type=PointGeometryType.SLOPE_DELTA_X,
-        param_1_expr="i_he",
-        param_2_expr="B_he",
-        point_codes_str='"Mep_vh"',
-        add_link=True,
-        link_name="L6",
-        link_codes_str='"Top", "Viahe"',
+        engine=engine, point_code="P13", from_point="P12",
+        point_type=PointGeometryType.SLOPE_DELTA_X, param_1_expr="i_he", param_2_expr="B_he",
+        point_codes_str='"Mep_vh"', add_link=True, link_name="L16", link_codes_str='"Top", "Viahe"',
     )
 
     # 5. Cảnh báo kiểm tra bề rộng làn

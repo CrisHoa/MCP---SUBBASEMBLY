@@ -2,12 +2,15 @@
 SAC MCP Server (sac-mcp-server)
 Model Context Protocol Server chuyên dụng cho Autodesk Civil 3D Subassembly Composer (2025 - 2027).
 
-Nhóm công cụ (15 tool):
+Nhóm công cụ (23 tool):
   - Đọc / tra cứu: inspect_pkt, validate_pkt_native, get_sac_reference_and_formulas,
     list_examples_and_split_catalog
   - Tạo mới: create_pkt_from_template, generate_assembly_recipe
-  - Sửa file: add_parameter, add_point_and_link, add_link, add_fillet_arc, add_loop_geometry,
-    add_intersection_point, add_strip_surface, add_shape, add_report_message
+  - Sửa file - hình học: add_parameter, add_point_and_link, add_link, add_curve, add_fillet_arc,
+    add_offset_geometry, add_loop_geometry, add_intersection_point, add_strip_surface, add_shape,
+    add_get_mark_point, add_set_mark_point
+  - Sửa file - logic: add_flow_decision, add_define_variable, add_set_variable,
+    add_set_output_parameter, add_report_message
 """
 
 from __future__ import annotations
@@ -57,7 +60,10 @@ mcp = _MCPServerClass(
         "Mọi tool sửa file đều kiểm định Tầng 1+2 trước khi ghi; nếu lỗi, file gốc giữ nguyên "
         "và kết quả trả về success=false. Bản sao lưu trước mỗi lần sửa nằm ở '<tên>.pkt.bak'. "
         "parent_node_id nhận '__ReferenceIDn' (FlowStep) hoặc '__ReferenceIDn:True' / ':False' (FlowDecision); "
-        "bỏ trống để nối vào cuối luồng."
+        "bỏ trống để nối vào MỌI đầu ra đang mở của luồng (các nhánh hội tụ). "
+        "Rẽ nhánh: add_flow_decision trả reference id D; đặt khối đầu nhánh bằng parent_node_id='D:True' / 'D:False', "
+        "các khối sau trong nhánh dùng reference id của khối liền trước. "
+        "Kết quả có 'warnings' (Tầng 2 mới phát sinh + Tầng 3 DLL gốc) - hãy đọc và sửa nếu có."
     ),
 )
 
@@ -130,6 +136,80 @@ def _native_warnings(pkt_path: Path) -> List[str]:
     ]
 
 
+# Thuộc tính ĐỊNH NGHĨA tên hình học trong các activity của SAC (theo activity_catalog.json).
+# SetMarkPointActivity.PointNumber chỉ THAM CHIẾU Point có sẵn nên không tính.
+_GEOMETRY_NAME_ATTRS = (
+    "PointNumber", "LinkNumber", "ShapeNumber", "LoopNumber", "OffsetNumber",
+    "StartPointName", "EndPointName",
+)
+_NAME_REFERENCE_ONLY = {"SetMarkPointActivity"}
+
+
+def _existing_geometry_names(engine: FlowchartEngine) -> dict:
+    """{tên: activity} của mọi Point / Link / Curve / Shape / Loop / Offset đã định nghĩa trong Flowchart."""
+    names: dict = {}
+    flowchart = engine.get_flowchart_element()
+    for el in flowchart.iter(etree.Element):
+        local = etree.QName(el).localname
+        if "." in local or local in _NAME_REFERENCE_ONLY:
+            continue
+        for attr in _GEOMETRY_NAME_ATTRS:
+            val = (el.get(attr) or "").strip()
+            if val and not val.startswith("{") and not val.startswith("["):
+                names.setdefault(val, local)
+        if el.get("AutoLink") == "True":
+            val = (el.get("AutoLinkGeometryName") or "").strip()
+            if val and not val.startswith("{"):
+                names.setdefault(val, local)
+    return names
+
+
+def _guard_new_names(engine: FlowchartEngine, new_names: List[Optional[str]], allow_duplicate_name: bool) -> None:
+    """
+    Chặn tạo trùng tên hình học (Point / Link / Shape / Loop / Offset) - dùng chung cho mọi tool tạo hình học.
+    allow_duplicate_name=True chỉ dùng khi CỐ Ý tạo lại cùng tên ở nhánh FlowDecision loại trừ
+    (VD: nhánh Đào và nhánh Đắp cùng tạo 'P5' / 'L5').
+    """
+    wanted = [n.strip() for n in new_names if n and n.strip()]
+    dup_in_call = sorted({n for n in wanted if wanted.count(n) > 1})
+    if dup_in_call:
+        raise ValueError(f"Tên hình học bị lặp trong cùng một lệnh: {dup_in_call}.")
+    if allow_duplicate_name:
+        return
+    existing = _existing_geometry_names(engine)
+    clash = [f"'{n}' (đã có trong {existing[n]})" for n in wanted if n in existing]
+    if clash:
+        raise ValueError(
+            f"Tên đã tồn tại trong file: {', '.join(clash)}. Chọn tên khác; chỉ dùng "
+            "allow_duplicate_name=True khi tạo lại tên này ở nhánh FlowDecision loại trừ."
+        )
+
+
+def _static_warning_set(xaml_text: str) -> List[Tuple[str, str]]:
+    """Các WARNING Tầng 2 (ngữ nghĩa tĩnh: GEOMETRY_REFERENCE, FLOW_UNREACHABLE...) của một XAML."""
+    from sac_mcp.core.semantic_checks import check_semantics
+
+    try:
+        return [(i.category, i.message) for i in check_semantics(xaml_text) if i.severity == "WARNING"]
+    except Exception:
+        return []
+
+
+def _new_static_warnings(before_xaml: str, after_xaml: str) -> List[str]:
+    """
+    Chỉ trả các WARNING Tầng 2 MỚI phát sinh do lần sửa này (so với file trước khi sửa),
+    để cảnh báo sẵn có trong file thật không lặp lại ở mọi lần gọi tool.
+    """
+    before = set(_static_warning_set(before_xaml))
+    out: List[str] = []
+    for cat, msg in _static_warning_set(after_xaml):
+        if (cat, msg) not in before:
+            line = f"Tầng 2 [{cat}]: {msg}"
+            if line not in out:
+                out.append(line)
+    return out
+
+
 def _mutate_pkt(action: str, pkt_path: str, fn: MutationFn) -> str:
     """
     Khung chung cho mọi tool sửa file .pkt:
@@ -139,9 +219,11 @@ def _mutate_pkt(action: str, pkt_path: str, fn: MutationFn) -> str:
     """
     try:
         pkg = PktPackage.open(pkt_path)
-        engine = FlowchartEngine(pkg.get_xaml_text())
+        original_xaml = pkg.get_xaml_text()
+        engine = FlowchartEngine(original_xaml)
         details, message, ref_ids = fn(pkg, engine)
-        pkg.set_xaml_text(engine.to_xaml_string())
+        new_xaml = engine.to_xaml_string()
+        pkg.set_xaml_text(new_xaml)
         pkg.save(backup=True, validate=True)
         res = MutationResult(
             success=True,
@@ -150,7 +232,10 @@ def _mutate_pkt(action: str, pkt_path: str, fn: MutationFn) -> str:
             message=message,
             created_reference_ids=[r for r in ref_ids if r],
             details=details,
-            warnings=engine.warnings + pkg.warnings + _native_warnings(pkg.pkt_path),
+            warnings=engine.warnings
+            + pkg.warnings
+            + _new_static_warnings(original_xaml, new_xaml)
+            + _native_warnings(pkg.pkt_path),
             backup_path=str(pkg.last_backup_path) if pkg.last_backup_path else None,
         )
         return json.dumps(res.model_dump(), ensure_ascii=False, indent=2)
@@ -358,34 +443,55 @@ def add_point_and_link(
     param_1_expr: str = "0.0",
     param_2_expr: str = "0.0",
     point_codes_str: str = "",
-    add_link: bool = True,
-    link_name: str = "L1",
+    add_link: Optional[bool] = None,
+    link_name: str = "",
     link_codes_str: str = "",
     is_auxiliary: bool = False,
     use_superelevation_formula: bool = False,
     parent_node_id: Optional[str] = None,
+    allow_duplicate_name: bool = False,
+    allow_duplicate_link: bool = False,
 ) -> str:
     """
     Thêm Point hoặc Auxiliary Point (P1, P2... hoặc AP1, AP2...) theo Delta X & Delta Y,
-    Slope & Delta X, Slope to Surface... và tự động nối Link (L1 / AL1) trong file .pkt.
+    Slope & Delta X, Slope to Surface... và (tùy chọn) nối Link từ from_point tới Point mới.
+
+    Ý nghĩa param_1_expr / param_2_expr theo point_type:
+      - 'DeltaX_DeltaY'   : DeltaX (m)          / DeltaY (m)
+      - 'Slope_DeltaX'    : Slope (VD -0.02)    / DeltaX (m)
+      - 'Slope_DeltaY'    : Slope               / DeltaY (m)
+      - 'Angle_Distance'  : Góc (độ)            / Khoảng cách (m)
+      - 'Slope_To_Surface': Slope               / TÊN Target Parameter kiểu SurfaceTarget (VD 'EG');
+                            phải add_parameter(param_category='Target', data_type='SurfaceTarget') trước.
+      - 'Interpolate'     : TÊN Point đích (VD 'P5') / tỉ lệ nội suy từ from_point tới Point đích
+                            (0 = trùng from_point, 1 = trùng Point đích, VD 0.5 = trung điểm).
+    Số được giữ nguyên, biến/biểu thức tự bọc [...].
 
     Args:
         pkt_path: Đường dẫn tới file .pkt cần chỉnh sửa.
-        point_code: Mã Point (VD: 'P1', 'P2' hoặc 'AP1' nếu is_auxiliary=True).
+        point_code: Mã Point (VD: 'P1', 'P2' hoặc 'AP1' nếu is_auxiliary=True). Không được trùng tên đã có.
         from_point: Điểm tham chiếu bắt đầu (VD: 'Origin', 'P1', 'AP1').
-        point_type: Phương thức xác định điểm ('DeltaX_DeltaY', 'Slope_DeltaX', 'Slope_DeltaY', 'Angle_Distance', 'Slope_To_Surface', 'Interpolate').
-        param_1_expr: Biểu thức tham số 1 (VD: DeltaX cho 'DeltaX_DeltaY', hoặc Slope cho 'Slope_DeltaX').
-        param_2_expr: Biểu thức tham số 2 (VD: DeltaY cho 'DeltaX_DeltaY', hoặc DeltaX cho 'Slope_DeltaX').
+        point_type: Phương thức xác định điểm (xem bảng trên).
+        param_1_expr: Tham số 1 theo point_type (xem bảng trên).
+        param_2_expr: Tham số 2 theo point_type (xem bảng trên).
         point_codes_str: Chuỗi Code cho Point trong Civil 3D (VD: '\"Crown\"' hoặc '\"ETW\"').
-        add_link: Nếu True, tự động nối Link từ `from_point` tới `point_code`.
-        link_name: Mã Link (VD: 'L1', 'L2' hoặc 'AL1').
+        add_link: Bỏ trống (mặc định) = tạo Link khi và chỉ khi có link_name. True bắt buộc kèm link_name;
+                  False = chỉ tạo Point dù có link_name.
+        link_name: Mã Link nối from_point -> point_code (VD: 'L1' hoặc 'AL1' cho điểm phụ).
+                   Không được trùng tên đã có (tool trả lỗi thay vì âm thầm tạo Link trùng).
         link_codes_str: Chuỗi Code cho Link (VD: '\"Top\", \"Pave\"').
         is_auxiliary: Nếu True, tạo phần tử phụ trợ Auxiliary Point / Auxiliary Link (AP/AL).
         use_superelevation_formula: Nếu True và point_type là Slope_DeltaX / Slope_DeltaY / Slope_To_Surface,
                                     tự động điền công thức quay siêu cao 8 nhánh chuẩn vào param_1_expr
                                     với biến độ dốc mặc định lấy từ param_1_expr (VD: 'LaneSlope').
         parent_node_id: (Tùy chọn) __ReferenceID của node cha. Nếu bỏ trống sẽ tự nối vào cuối Flowchart.
+        allow_duplicate_name: True chỉ khi CỐ Ý tạo lại cùng tên Point/Link ở nhánh FlowDecision loại trừ
+                              (VD: nhánh Đào và nhánh Đắp cùng tạo 'P5' & 'L5').
+        allow_duplicate_link: Bí danh cũ của allow_duplicate_name (giữ để tương thích).
     """
+    lname = (link_name or "").strip()
+    do_link = bool(lname) if add_link is None else bool(add_link)
+    allow_dup = allow_duplicate_name or allow_duplicate_link
     actual_param_1 = param_1_expr
     if use_superelevation_formula and point_type in (
         "Slope_DeltaX",
@@ -396,6 +502,12 @@ def add_point_and_link(
         actual_param_1 = build_superelevation_slope_expression(fallback_slope_param=fallback_var)
 
     def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        if do_link and not lname:
+            raise ValueError(
+                "add_link=True nhưng chưa truyền link_name. Truyền link_name (VD: 'L1' / 'AL1') "
+                "hoặc bỏ add_link nếu chỉ tạo Point."
+            )
+        _guard_new_names(engine, [point_code, lname if do_link else None], allow_dup)
         info = GeometryBuilder.add_point_and_link(
             engine=engine,
             point_code=point_code,
@@ -404,8 +516,8 @@ def add_point_and_link(
             param_1_expr=actual_param_1,
             param_2_expr=param_2_expr,
             point_codes_str=point_codes_str,
-            add_link=add_link,
-            link_name=link_name,
+            add_link=do_link,
+            link_name=lname if do_link else "",
             link_codes_str=link_codes_str,
             is_auxiliary=is_auxiliary,
             parent_node_id=parent_node_id,
@@ -413,7 +525,7 @@ def add_point_and_link(
         kind_str = "Auxiliary Point" if is_auxiliary else "Point"
         msg = (
             f"Đã thêm {kind_str} '{point_code}' (từ {from_point}, kiểu {point_type})"
-            + (f" kèm Link '{link_name}'" if add_link else "")
+            + (f" kèm Link '{lname}'" if do_link else "")
             + f" tại node {info['reference_id']}."
         )
         return info, msg, [info["reference_id"]]
@@ -434,6 +546,7 @@ def add_link(
     apply_aor: bool = False,
     is_auxiliary: bool = False,
     parent_node_id: Optional[str] = None,
+    allow_duplicate_name: bool = False,
 ) -> str:
     """
     Thêm Link hoặc Auxiliary Link (CreateLink / CreateAuxLink) nối giữa 2 Point có sẵn
@@ -441,15 +554,17 @@ def add_link(
 
     Args:
         pkt_path: Đường dẫn tới file .pkt cần chỉnh sửa.
-        link_name: Tên/Mã Link (VD: 'L7' hoặc 'AL2').
+        link_name: Tên/Mã Link (VD: 'L7' hoặc 'AL2'). Không được trùng tên hình học đã có.
         start_point: Tên điểm bắt đầu (VD: 'P7').
         end_point: Tên điểm kết thúc (VD: 'P3').
         link_codes_str: Chuỗi mã LinkCode cách nhau bởi dấu phẩy (VD: '"Datum"' hoặc '"Top", "Pave"').
         apply_aor: Có áp dụng siêu cao (Apply AOR) cho Link này không.
         is_auxiliary: True nếu là Link phụ trợ (AL).
         parent_node_id: (Tùy chọn) __ReferenceID của node cha.
+        allow_duplicate_name: True chỉ khi CỐ Ý tạo lại cùng tên ở nhánh FlowDecision loại trừ.
     """
     def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        _guard_new_names(engine, [link_name], allow_duplicate_name)
         info = GeometryBuilder.add_link(
             engine=engine,
             link_name=link_name,
@@ -480,6 +595,7 @@ def add_fillet_arc(
     link_codes_str: str = "",
     parent_node_id: Optional[str] = None,
     start_point_name: Optional[str] = None,
+    allow_duplicate_name: bool = False,
 ) -> str:
     """
     Thêm khối bo tròn góc cong Fillet Arc (<asa1:FilletArcActivity>) vào Flowchart.
@@ -495,8 +611,12 @@ def add_fillet_arc(
         link_codes_str: Chuỗi Code gán cho đường cong (VD: '\"Top\", \"Link_Bo DPC\"').
         parent_node_id: (Tùy chọn) __ReferenceID của node cha.
         start_point_name: (Tùy chọn) Mã Point tại điểm đầu cung tròn (VD: 'P7'); bỏ trống thì tự đặt '<link>_Start'.
+        allow_duplicate_name: True chỉ khi CỐ Ý tạo lại cùng tên ở nhánh FlowDecision loại trừ.
     """
     def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        if first_link.strip() == (second_link or "").strip():
+            raise ValueError("first_link và second_link phải là 2 Link khác nhau.")
+        _guard_new_names(engine, [link_number, (start_point_name or f"{link_number.strip()}_Start"), (end_point_name or f"{link_number.strip()}_End")], allow_duplicate_name)
         info = GeometryBuilder.add_fillet_arc(
             engine=engine,
             link_number=link_number,
@@ -521,6 +641,7 @@ def add_loop_geometry(
     links: list[str],
     repetition_count: int = 10,
     parent_node_id: Optional[str] = None,
+    allow_duplicate_name: bool = False,
 ) -> str:
     """
     Thêm khối vòng lặp hình học (<asa2:CreateLoop>) vào Flowchart.
@@ -532,8 +653,10 @@ def add_loop_geometry(
         links: Danh sách các Link cấu thành một chu kỳ lặp (VD: ['L11', 'L12']).
         repetition_count: Số lần lặp tối đa (mặc định 10).
         parent_node_id: (Tùy chọn) __ReferenceID của node cha.
+        allow_duplicate_name: True chỉ khi CỐ Ý tạo lại cùng tên ở nhánh FlowDecision loại trừ.
     """
     def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        _guard_new_names(engine, [loop_code], allow_duplicate_name)
         info = GeometryBuilder.add_loop_geometry(
             engine=engine,
             loop_code=loop_code,
@@ -559,6 +682,7 @@ def add_intersection_point(
     is_auxiliary: bool = False,
     point_codes_str: str = "",
     parent_node_id: Optional[str] = None,
+    allow_duplicate_name: bool = False,
 ) -> str:
     """
     Thêm khối tạo giao điểm giữa 2 Link (<LinkIntersection> hoặc <AuxIntersection>).
@@ -572,8 +696,10 @@ def add_intersection_point(
         is_auxiliary: Nếu True, tạo điểm phụ trợ AuxIntersection (AP).
         point_codes_str: (Tùy chọn) Chuỗi Code cho Point trong Civil 3D.
         parent_node_id: (Tùy chọn) __ReferenceID của node cha.
+        allow_duplicate_name: True chỉ khi CỐ Ý tạo lại cùng tên ở nhánh FlowDecision loại trừ.
     """
     def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        _guard_new_names(engine, [point_code], allow_duplicate_name)
         info = GeometryBuilder.add_intersection_point(
             engine=engine,
             point_code=point_code,
@@ -604,6 +730,7 @@ def add_strip_surface(
     start_point_name: Optional[str] = None,
     start_offset: Optional[str] = None,
     link_number: Optional[str] = None,
+    allow_duplicate_name: bool = False,
 ) -> str:
     """
     Thêm khối bóc hữu cơ / bề mặt (<asa2:StripSurfaceActivity>).
@@ -622,8 +749,15 @@ def add_strip_surface(
         start_point_name: (Tùy chọn) Tên Point tại đầu dải bóc (VD: 'P36').
         start_offset: (Tùy chọn) Offset bắt đầu, số hoặc biểu thức (VD: 'P32.X').
         link_number: (Tùy chọn) Mã Link đáy lớp bóc (VD: 'L36').
+        allow_duplicate_name: True chỉ khi CỐ Ý tạo lại cùng tên ở nhánh FlowDecision loại trừ.
     """
     def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        # StripSurface TẠO MỚI 2 Point + 1 Link (đối chiếu Dam.pkt, ShoulderBacking.pkt của Autodesk).
+        # Trùng tên chỉ cảnh báo (không chặn) để giữ tương thích các file / script cũ.
+        try:
+            _guard_new_names(engine, [end_point_name, start_point_name, link_number], allow_duplicate_name)
+        except ValueError as exc:
+            engine.warnings.append(f"StripSurface: {exc} StripSurface tạo Point/Link MỚI, nên đặt tên chưa dùng.")
         info = GeometryBuilder.add_strip_surface(
             engine=engine,
             display_name=display_name,
@@ -654,6 +788,7 @@ def add_shape(
     link_names: list[str],
     shape_codes_str: str = "",
     parent_node_id: Optional[str] = None,
+    allow_duplicate_name: bool = False,
 ) -> str:
     """
     Thêm khối Shape (S1, S2...) tạo diện tích khép kín từ danh sách các Link
@@ -665,8 +800,10 @@ def add_shape(
         link_names: Danh sách mã các Link bao quanh Shape (VD: ['L1', 'L2', 'L3', 'L4']).
         shape_codes_str: Chuỗi Code cho Shape trong Civil 3D (VD: '\"Pave1\"', '\"Base\"').
         parent_node_id: (Tùy chọn) __ReferenceID của node cha.
+        allow_duplicate_name: True chỉ khi CỐ Ý tạo lại cùng tên ở nhánh FlowDecision loại trừ.
     """
     def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        _guard_new_names(engine, [shape_code], allow_duplicate_name)
         info = GeometryBuilder.add_shape(
             engine=engine,
             shape_code=shape_code,
@@ -729,7 +866,7 @@ def get_sac_reference_and_formulas(
 def add_report_message(
     pkt_path: str,
     message_expr: str,
-    message_type: Literal["Information", "Warning", "Error"] = "Warning",
+    message_type: Literal["Informational", "Information", "Warning", "Error"] = "Warning",
     condition_expr: Optional[str] = None,
     parent_node_id: Optional[str] = None,
 ) -> str:
@@ -740,21 +877,24 @@ def add_report_message(
     Args:
         pkt_path: Đường dẫn tới file .pkt cần chỉnh sửa.
         message_expr: Biểu thức chuỗi VB.NET cần thông báo (VD: '\"Chiều rộng làn <= 0!\"').
-        message_type: Cấp độ thông báo trên Event Viewer ('Information', 'Warning', 'Error').
+        message_type: Cấp độ thông báo trên Event Viewer ('Informational', 'Warning', 'Error');
+                      'Information' được chấp nhận như bí danh của 'Informational'.
         condition_expr: (Tùy chọn) Biểu thức điều kiện VB.NET (VD: 'LaneWidth <= 0'). Nếu truyền vào,
                         công cụ sẽ tự động sinh một khối <FlowDecision> và nối nhánh True vào ReportMessage.
         parent_node_id: (Tùy chọn) __ReferenceID của node cha cần nối vào.
     """
+    level = "Informational" if message_type == "Information" else message_type
+
     def _apply(pkg: PktPackage, engine: FlowchartEngine):
         info = LogicBuilder.add_report_message(
             engine=engine,
             message_expr=message_expr,
-            message_type=ReportMessageType(message_type),
+            message_type=ReportMessageType(level),
             condition_expr=condition_expr,
             parent_node_id=parent_node_id,
         )
         msg = (
-            f"Đã thêm khối ReportMessage ({message_type})"
+            f"Đã thêm khối ReportMessage ({level})"
             + (
                 f" kèm điều kiện Decision '{condition_expr}' (nhánh False và sau ReportMessage cùng đi tiếp)"
                 if condition_expr
@@ -765,6 +905,406 @@ def add_report_message(
         return info, msg, info["created_reference_ids"]
 
     return _mutate_pkt("add_report_message", pkt_path, _apply)
+
+
+# ============================================================================
+# NHÓM TOOL ACTIVITY BỔ SUNG: Curve, Offset, Mark Point, Biến, Output, FlowDecision
+# ============================================================================
+@mcp.tool()
+def add_curve(
+    pkt_path: str,
+    link_number: str,
+    start_point: str,
+    end_point: str,
+    creation_type: Literal["ArcGeneral", "Arc3Points", "ParabolaGeneral"] = "ArcGeneral",
+    center_point: Optional[str] = None,
+    arc_point: Optional[str] = None,
+    mid_ordinate_expr: Optional[str] = None,
+    num_increments: int = 8,
+    link_codes_str: str = "",
+    is_auxiliary: bool = False,
+    parent_node_id: Optional[str] = None,
+    allow_duplicate_name: bool = False,
+) -> str:
+    """
+    Thêm Link cong (<CreateCurve> hoặc <CreateAuxCurve>) nối 2 Point có sẵn bằng cung tròn / parabol.
+    Dùng cho đáy cống tròn, rãnh hình cung, mui luyện, gờ bó vỉa cong...
+
+    Mỗi kiểu cung cần ĐÚNG MỘT đối số phụ (thiếu thì SAC báo lỗi khi chạy):
+      - 'ArcGeneral'      : cung tròn qua tâm -> bắt buộc center_point (Point tâm, VD 'AP1').
+      - 'Arc3Points'      : cung tròn qua 3 điểm -> bắt buộc arc_point (Point thứ 2 nằm trên cung, VD 'P5').
+      - 'ParabolaGeneral' : parabol -> bắt buộc mid_ordinate_expr (tung độ giữa dây cung, VD '0.15' hoặc 'H_Vong').
+
+    Args:
+        pkt_path: Đường dẫn tới file .pkt cần chỉnh sửa.
+        link_number: Mã Link cong mới (VD: 'L10' hoặc 'AL3' nếu is_auxiliary=True).
+        start_point: Point đầu cung (đã tạo trước, VD: 'P14').
+        end_point: Point cuối cung (đã tạo trước, VD: 'P13').
+        creation_type: Kiểu cung ('ArcGeneral', 'Arc3Points', 'ParabolaGeneral').
+        center_point: Point tâm cung - chỉ dùng cho 'ArcGeneral'.
+        arc_point: Point thứ 2 trên cung - chỉ dùng cho 'Arc3Points'.
+        mid_ordinate_expr: Tung độ giữa (số hoặc biểu thức VB) - chỉ dùng cho 'ParabolaGeneral'.
+        num_increments: Số đoạn thẳng chia nhỏ để xấp xỉ đường cong (NoIncrements, mặc định 8).
+        link_codes_str: Chuỗi Link Code cách nhau dấu phẩy (VD: '\"Pipe\"' hoặc '\"Top\", \"Ditch\"').
+        is_auxiliary: True để tạo Auxiliary Curve (CreateAuxCurve, không xuất sang Civil 3D).
+        parent_node_id: (Tùy chọn) __ReferenceID của node cha ('__ReferenceIDn' hoặc '__ReferenceIDn:True'/':False').
+        allow_duplicate_name: True chỉ khi CỐ Ý tạo lại cùng tên ở nhánh FlowDecision loại trừ.
+    """
+    required = {
+        "ArcGeneral": ("center_point", center_point),
+        "Arc3Points": ("arc_point", arc_point),
+        "ParabolaGeneral": ("mid_ordinate_expr", mid_ordinate_expr),
+    }[creation_type]
+
+    def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        if not (required[1] and str(required[1]).strip()):
+            raise ValueError(f"creation_type='{creation_type}' bắt buộc truyền {required[0]}.")
+        if num_increments < 1:
+            raise ValueError("num_increments phải >= 1.")
+        _guard_new_names(engine, [link_number], allow_duplicate_name)
+        info = GeometryBuilder.add_curve(
+            engine=engine,
+            link_number=link_number,
+            start_point=start_point,
+            end_point=end_point,
+            center_point=center_point if creation_type == "ArcGeneral" else None,
+            arc_point=arc_point if creation_type == "Arc3Points" else None,
+            mid_ordinate_expr=mid_ordinate_expr if creation_type == "ParabolaGeneral" else None,
+            creation_type=creation_type,
+            num_increments=num_increments,
+            link_codes_str=link_codes_str,
+            is_auxiliary=is_auxiliary,
+            parent_node_id=parent_node_id,
+        )
+        kind = "AuxCurve" if is_auxiliary else "Curve"
+        msg = (
+            f"Đã thêm {kind} '{link_number}' ({creation_type}) từ {start_point} đến {end_point} "
+            f"tại node {info['reference_id']}."
+        )
+        return info, msg, [info["reference_id"]]
+
+    return _mutate_pkt("add_curve", pkt_path, _apply)
+
+
+@mcp.tool()
+def add_offset_geometry(
+    pkt_path: str,
+    offset_code: str,
+    links: list[str],
+    offset_distance: float = 0.15,
+    offset_codes_str: str = "",
+    parent_node_id: Optional[str] = None,
+    allow_duplicate_name: bool = False,
+) -> str:
+    """
+    Thêm khối Offset (<CreateOffset>): tạo đường song song cách một chuỗi Link có sẵn một khoảng cố định
+    (VD: đáy lớp móng song song mặt đường, lớp đệm lót dưới đáy cống).
+
+    Args:
+        pkt_path: Đường dẫn tới file .pkt cần chỉnh sửa.
+        offset_code: Mã Offset (VD: 'O1').
+        links: Danh sách Link liên tiếp tạo thành polyline cần offset (VD: ['L1', 'L2']).
+        offset_distance: Khoảng offset (m). Dương/âm quyết định phía offset (VD: -0.15 = xuống dưới 15cm).
+        offset_codes_str: Chuỗi Code cho Offset cách nhau dấu phẩy (VD: '\"SubBase\"').
+        parent_node_id: (Tùy chọn) __ReferenceID của node cha ('__ReferenceIDn' hoặc '__ReferenceIDn:True'/':False').
+        allow_duplicate_name: True chỉ khi CỐ Ý tạo lại cùng tên ở nhánh FlowDecision loại trừ.
+    """
+    def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        clean = [lk.strip() for lk in links if lk and lk.strip()]
+        if not clean:
+            raise ValueError("links phải có ít nhất 1 mã Link (VD: ['L1']).")
+        if any("," in lk for lk in clean):
+            raise ValueError("Mỗi phần tử của links là MỘT mã Link, không chứa dấu phẩy.")
+        _guard_new_names(engine, [offset_code], allow_duplicate_name)
+        info = GeometryBuilder.add_offset_geometry(
+            engine=engine,
+            offset_code=offset_code,
+            links=clean,
+            offset_distance=offset_distance,
+            offset_codes_str=offset_codes_str,
+            parent_node_id=parent_node_id,
+        )
+        msg = (
+            f"Đã thêm Offset '{offset_code}' (Links={clean}, d={offset_distance}m) "
+            f"tại node {info['reference_id']}."
+        )
+        return info, msg, [info["reference_id"]]
+
+    return _mutate_pkt("add_offset_geometry", pkt_path, _apply)
+
+
+@mcp.tool()
+def add_get_mark_point(
+    pkt_path: str,
+    point_number: str,
+    mark_name: str,
+    point_codes_str: str = "",
+    prev_offset_expr: str = "0",
+    prev_delta_elevation_expr: str = "0",
+    is_auxiliary: bool = False,
+    parent_node_id: Optional[str] = None,
+    allow_duplicate_name: bool = False,
+) -> str:
+    """
+    Thêm Point lấy từ Mark Point (<GetMarkPointActivity> / <GetAuxMarkPointActivity>): bắt vào
+    điểm đã được một Subassembly khác trong Assembly đánh dấu bằng Set Mark Point.
+
+    Args:
+        pkt_path: Đường dẫn tới file .pkt cần chỉnh sửa.
+        point_number: Mã Point mới tạo tại vị trí Mark Point (VD: 'P11' hoặc 'AP2' nếu is_auxiliary=True).
+        mark_name: Tên Mark Point cần bắt (VD: 'EdgePoint') hoặc biểu thức chuỗi trong ngoặc vuông (VD: '[MarkPtName]').
+        point_codes_str: Chuỗi Point Code cách nhau dấu phẩy (VD: '\"ETW\"').
+        prev_offset_expr: Offset (m) của điểm khi Preview trong SAC (chưa có Mark Point thật), số hoặc biểu thức.
+        prev_delta_elevation_expr: Chênh cao (m) của điểm khi Preview trong SAC.
+        is_auxiliary: True để tạo Auxiliary Point (GetAuxMarkPointActivity).
+        parent_node_id: (Tùy chọn) __ReferenceID của node cha ('__ReferenceIDn' hoặc '__ReferenceIDn:True'/':False').
+        allow_duplicate_name: True chỉ khi CỐ Ý tạo lại cùng tên ở nhánh FlowDecision loại trừ.
+    """
+    def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        _guard_new_names(engine, [point_number], allow_duplicate_name)
+        info = GeometryBuilder.add_get_mark_point(
+            engine=engine,
+            point_number=point_number,
+            mark_name=mark_name,
+            point_codes_str=point_codes_str,
+            is_auxiliary=is_auxiliary,
+            parent_node_id=parent_node_id,
+            prev_offset_expr=prev_offset_expr,
+            prev_delta_elevation_expr=prev_delta_elevation_expr,
+        )
+        msg = f"Đã thêm Point '{point_number}' lấy từ Mark Point '{mark_name}' tại node {info['reference_id']}."
+        return info, msg, [info["reference_id"]]
+
+    return _mutate_pkt("add_get_mark_point", pkt_path, _apply)
+
+
+@mcp.tool()
+def add_set_mark_point(
+    pkt_path: str,
+    point_number: str,
+    mark_name: str,
+    parent_node_id: Optional[str] = None,
+) -> str:
+    """
+    Đánh dấu một Point thành Mark Point (<SetMarkPointActivity>) để Subassembly đặt sau trong Assembly
+    bắt vào bằng Get Mark Point (VD: đánh dấu mép làn 'EdgePoint' cho lề / bó vỉa bám theo).
+
+    Args:
+        pkt_path: Đường dẫn tới file .pkt cần chỉnh sửa.
+        point_number: Mã Point đã tạo trước đó cần đánh dấu (VD: 'P2').
+        mark_name: Tên Mark Point (VD: 'EdgePoint'); phải trùng tên dùng ở add_get_mark_point của Subassembly kia.
+        parent_node_id: (Tùy chọn) __ReferenceID của node cha ('__ReferenceIDn' hoặc '__ReferenceIDn:True'/':False').
+    """
+    def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        if not point_number.strip() or not mark_name.strip():
+            raise ValueError("point_number và mark_name không được để trống.")
+        info = LogicBuilder.add_set_mark_point(
+            engine=engine,
+            point_number=point_number,
+            mark_name=mark_name,
+            parent_node_id=parent_node_id,
+        )
+        msg = f"Đã đánh dấu Point '{point_number}' thành Mark Point '{mark_name}' tại node {info['reference_id']}."
+        return info, msg, [info["reference_id"]]
+
+    return _mutate_pkt("add_set_mark_point", pkt_path, _apply)
+
+
+@mcp.tool()
+def add_define_variable(
+    pkt_path: str,
+    variable_name: str,
+    variable_type: Literal["Double", "Integer", "String", "YesNo"] = "Double",
+    default_value_expr: str = "0.0",
+    parent_node_id: Optional[str] = None,
+) -> str:
+    """
+    Khai báo biến nội bộ (<InternalVariableDefine>, mục Define Variable trong SAC) để lưu kết quả trung gian
+    và dùng lại trong biểu thức của các khối phía sau.
+
+    Args:
+        pkt_path: Đường dẫn tới file .pkt cần chỉnh sửa.
+        variable_name: Tên biến (bắt đầu bằng chữ cái, chỉ gồm chữ/số/'_'; VD: 'Var_H'). Bị từ chối nếu trùng
+                       từ khóa VB (Next, If, End, Step...), trùng biến đã khai báo, trùng Parameter
+                       hoặc trùng tên Point/Link đã có (VB không phân biệt hoa thường).
+        variable_type: Kiểu biến ('Double', 'Integer', 'String', 'YesNo').
+        default_value_expr: Giá trị khởi tạo - biểu thức VB (VD: '0.0', 'LaneWidth / 2', '\"Pave\"' cho String,
+                            'Yes' / 'No' cho YesNo). Tự bọc [...] nếu chưa có.
+        parent_node_id: (Tùy chọn) __ReferenceID của node cha ('__ReferenceIDn' hoặc '__ReferenceIDn:True'/':False').
+    """
+    def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        from sac_mcp.core.builders.logic_builder import check_identifier
+
+        name = check_identifier(variable_name, "biến")
+        low = name.lower()
+        flowchart = engine.get_flowchart_element()
+        declared = {
+            (v.get("Name") or "").lower()
+            for v in flowchart.xpath("./*[local-name()='Flowchart.Variables']/*[local-name()='Variable']")
+        } | {
+            (el.get("VariableName") or "").lower()
+            for el in flowchart.xpath(".//*[local-name()='InternalVariableDefine']")
+        }
+        if low in declared:
+            raise ValueError(
+                f"Biến '{name}' đã được khai báo. Dùng add_set_variable để gán giá trị mới."
+            )
+        params = {
+            (p.get("Name") or "").lower()
+            for p in engine.root.xpath("./*[local-name()='Members']/*[local-name()='Property']")
+        }
+        if low in params:
+            raise ValueError(f"Tên '{name}' trùng một Parameter đã có (biến sẽ che Parameter). Hãy đặt tên khác.")
+        if low in {n.lower() for n in _existing_geometry_names(engine)}:
+            raise ValueError(f"Tên '{name}' trùng tên Point/Link/Shape đã có. Hãy đặt tên khác.")
+        info = LogicBuilder.add_define_variable(
+            engine=engine,
+            variable_name=variable_name,
+            variable_type=variable_type,
+            default_value_expr=default_value_expr,
+            parent_node_id=parent_node_id,
+        )
+        msg = (
+            f"Đã khai báo biến '{info['variable_name']}' <{info['variable_type']}> = {info['default_value']} "
+            f"tại node {info['reference_id']}."
+        )
+        return info, msg, [info["reference_id"]]
+
+    return _mutate_pkt("add_define_variable", pkt_path, _apply)
+
+
+@mcp.tool()
+def add_set_variable(
+    pkt_path: str,
+    variable_name: str,
+    value_expr: str,
+    variable_type: Optional[Literal["Double", "Integer", "String", "YesNo"]] = None,
+    parent_node_id: Optional[str] = None,
+) -> str:
+    """
+    Gán lại giá trị cho biến nội bộ đã khai báo bằng add_define_variable (<SetVariableValue>).
+
+    Args:
+        pkt_path: Đường dẫn tới file .pkt cần chỉnh sửa.
+        variable_name: Tên biến đã khai báo (VD: 'Var_H').
+        value_expr: Biểu thức VB tính giá trị mới (VD: 'Math.Abs(P2.Y - AP1.Y)'). Tự bọc [...] nếu chưa có.
+        variable_type: (Tùy chọn) Kiểu biến; bỏ trống để tự lấy theo khai báo của biến.
+        parent_node_id: (Tùy chọn) __ReferenceID của node cha ('__ReferenceIDn' hoặc '__ReferenceIDn:True'/':False').
+    """
+    def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        from sac_mcp.core.builders.logic_builder import lookup_declared_type
+
+        if lookup_declared_type(engine, variable_name.strip()) is None:
+            raise ValueError(
+                f"Biến '{variable_name}' chưa được khai báo. Gọi add_define_variable trước."
+            )
+        info = LogicBuilder.add_set_variable_value(
+            engine=engine,
+            variable_name=variable_name,
+            value_expr=value_expr,
+            variable_type=variable_type,
+            parent_node_id=parent_node_id,
+        )
+        msg = f"Đã gán {info['variable_name']} = {value_expr} tại node {info['reference_id']}."
+        return info, msg, [info["reference_id"]]
+
+    return _mutate_pkt("add_set_variable", pkt_path, _apply)
+
+
+@mcp.tool()
+def add_set_output_parameter(
+    pkt_path: str,
+    parameter_name: str,
+    value_expr: str,
+    parameter_type: Optional[Literal["Double", "Integer", "String", "Boolean", "YesNo", "Slope", "Grade"]] = None,
+    parent_node_id: Optional[str] = None,
+) -> str:
+    """
+    Gán giá trị cho Output Parameter (<SetOutputParameterValue>) để Civil 3D / Subassembly khác đọc được
+    (VD: xuất chiều cao đào đắp, bề rộng thực tế). Output Parameter phải được tạo trước bằng
+    add_parameter(param_category='Output').
+
+    Args:
+        pkt_path: Đường dẫn tới file .pkt cần chỉnh sửa.
+        parameter_name: Tên Output Parameter (VD: 'OutLaneWidth').
+        value_expr: Biểu thức VB tính giá trị (VD: 'P11.X - P1.X', 'L1.Slope'). Tự bọc [...] nếu chưa có.
+        parameter_type: (Tùy chọn) Kiểu dữ liệu; bỏ trống để tự lấy theo khai báo của Output Parameter.
+        parent_node_id: (Tùy chọn) __ReferenceID của node cha ('__ReferenceIDn' hoặc '__ReferenceIDn:True'/':False').
+    """
+    def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        name = parameter_name.strip()
+        props = engine.root.xpath(
+            "./*[local-name()='Members']/*[local-name()='Property' and @Name=$n]", n=name
+        )
+        if not props:
+            raise ValueError(
+                f"Chưa có Output Parameter '{name}'. Gọi add_parameter(param_category='Output') trước."
+            )
+        if not (props[0].get("Type") or "").startswith("OutArgument("):
+            raise ValueError(f"Parameter '{name}' không phải Output Parameter (Type={props[0].get('Type')}).")
+        info = LogicBuilder.add_set_output_parameter(
+            engine=engine,
+            parameter_name=name,
+            value_expr=value_expr,
+            parameter_type=parameter_type,
+            parent_node_id=parent_node_id,
+        )
+        msg = f"Đã gán Output Parameter {name} = {value_expr} tại node {info['reference_id']}."
+        return info, msg, [info["reference_id"]]
+
+    return _mutate_pkt("add_set_output_parameter", pkt_path, _apply)
+
+
+@mcp.tool()
+def add_flow_decision(
+    pkt_path: str,
+    condition_expr: str,
+    display_name: str = "",
+    parent_node_id: Optional[str] = None,
+) -> str:
+    """
+    Thêm khối rẽ nhánh điều kiện (<FlowDecision>) vào Flowchart. Hai nhánh True / False ban đầu để trống.
+
+    Cách đặt các khối tiếp theo vào từng nhánh (dùng reference id trả về trong
+    details.decision_node_id / created_reference_ids[0], ví dụ '__ReferenceID7'):
+      - Khối ĐẦU TIÊN của nhánh True : gọi tool khác với parent_node_id='__ReferenceID7:True'.
+      - Khối ĐẦU TIÊN của nhánh False: gọi tool khác với parent_node_id='__ReferenceID7:False'.
+      - Các khối tiếp theo trong cùng nhánh: parent_node_id = reference id của khối ngay trước trong nhánh đó.
+      - Nhánh để trống nghĩa là "không làm gì" và luồng đi tiếp từ nhánh đó.
+      - Gọi tool với parent_node_id bỏ trống sẽ nối vào MỌI đầu ra đang mở (cả 2 nhánh hội tụ về khối mới).
+        Vì vậy hãy dựng xong nội dung các nhánh bằng parent_node_id tường minh trước khi nối khối hội tụ.
+
+    Args:
+        pkt_path: Đường dẫn tới file .pkt cần chỉnh sửa.
+        condition_expr: Biểu thức VB BẮT BUỘC trả về Boolean - phép so sánh / logic (VD: 'AP1.Y < P2.Y',
+                        'EG.IsValid', 'Side = Right', 'H > 2 And B < 5'). Một giá trị trần (VD: 'H', '1.5',
+                        'P2.Y') không phải Boolean nên bị DLL gốc báo lỗi ở Tầng 3.
+        display_name: (Tùy chọn) Tên hiển thị khối trên Flowchart; mặc định 'If (<điều kiện>)'.
+        parent_node_id: (Tùy chọn) __ReferenceID của node cha ('__ReferenceIDn' hoặc '__ReferenceIDn:True'/':False').
+                        Khi chèn vào giữa luồng, phần luồng phía sau được nối vào CẢ HAI nhánh của Decision mới
+                        (luồng cũ chạy tiếp dù điều kiện đúng hay sai); sau đó chèn khối vào từng nhánh như trên.
+    """
+    def _apply(pkg: PktPackage, engine: FlowchartEngine):
+        if not condition_expr or not condition_expr.strip():
+            raise ValueError("condition_expr không được để trống.")
+        info = LogicBuilder.add_flow_decision(
+            engine=engine,
+            condition_expr=condition_expr,
+            display_name=display_name,
+            parent_node_id=parent_node_id,
+        )
+        ref_id = info["decision_node_id"]
+        details = {k: v for k, v in info.items() if k != "element"}
+        details["reference_id"] = ref_id
+        details["true_branch_parent_id"] = f"{ref_id}:True"
+        details["false_branch_parent_id"] = f"{ref_id}:False"
+        msg = (
+            f"Đã thêm FlowDecision '{ref_id}' (điều kiện: {condition_expr.strip()}). "
+            f"Đặt khối vào nhánh bằng parent_node_id='{ref_id}:True' hoặc '{ref_id}:False'."
+        )
+        return details, msg, [ref_id]
+
+    return _mutate_pkt("add_flow_decision", pkt_path, _apply)
 
 
 @mcp.tool()
@@ -938,6 +1478,15 @@ def ensure_default_templates_exist(overwrite: bool = False) -> None:
             description=f"Base Subassembly Template for Autodesk Civil 3D {ver.value}",
             civil_version=ver,
         )
+
+
+# ============================================================================
+# Nhóm tool sửa / xoá node và spec khai báo (định nghĩa trong sac_mcp/tools_ext.py):
+#   remove_node, update_node, export_spec, build_from_spec
+# ============================================================================
+from sac_mcp import tools_ext as _tools_ext  # noqa: E402
+
+_tools_ext.register(mcp, _mutate_pkt, _safe_tool)
 
 
 def main() -> None:

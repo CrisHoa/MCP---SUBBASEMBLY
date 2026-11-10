@@ -66,6 +66,14 @@ class CurveType(str, Enum):
     PARABOLA_GENERAL = "ParabolaGeneral"
 
 
+class SacVariableType(str, Enum):
+    """Kiểu biến nội bộ (Define Variable) mà SAC hỗ trợ; 'YesNo' được ghi ra XAML là 'Yes\\No'."""
+    DOUBLE = "Double"
+    INTEGER = "Integer"
+    STRING = "String"
+    YES_NO = "YesNo"
+
+
 class IntersectionType(str, Enum):
     """Kiểu tìm giao điểm hình học trong SAC."""
     TWO_LINKS = "IntersectionTwoLinks"

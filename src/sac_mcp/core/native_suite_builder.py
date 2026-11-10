@@ -69,7 +69,9 @@ class NativeSuiteBuilder:
         GeometryBuilder.add_point_and_link(engine, "P1", "Origin", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-H_dao", point_codes_str='"Day_Cong"')
         # P2, P3: Đáy phui đào trái & phải
         GeometryBuilder.add_point_and_link(engine, "P2", "P1", PointGeometryType.DELTA_X_DELTA_Y, "-Half_B", "0.0", point_codes_str='"Day_Phui_L"')
-        GeometryBuilder.add_point_and_link(engine, "P3", "P1", PointGeometryType.DELTA_X_DELTA_Y, "Half_B", "0.0", point_codes_str='"Day_Phui_R"', add_link=True, link_name="L1", link_codes_str='"DayPhui"')
+        GeometryBuilder.add_point_and_link(engine, "P3", "P1", PointGeometryType.DELTA_X_DELTA_Y, "Half_B", "0.0", point_codes_str='"Day_Phui_R"', add_link=False)
+        # Đáy phui: nối P2 -> P3 (AutoLink từ P1 chỉ phủ nửa đáy)
+        GeometryBuilder.add_link(engine, "L1", "P2", "P3", link_codes_str='"DayPhui"')
 
         # P4, P5: Đáy bê tông lót
         GeometryBuilder.add_point_and_link(engine, "P4", "P2", PointGeometryType.DELTA_X_DELTA_Y, "BTLotExt", "0.0", point_codes_str='"BTLot_L"')
@@ -78,8 +80,10 @@ class NativeSuiteBuilder:
         GeometryBuilder.add_point_and_link(engine, "P7", "P6", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "BTLotThick", point_codes_str='"BTLot_TopR"', add_link=True, link_name="L3", link_codes_str='"BTLot"')
         # Link đỉnh BT lót
         GeometryBuilder.add_link(engine, "L4", "P5", "P7", link_codes_str='"BTLot", "Top"')
-        # Shape BT lót
-        GeometryBuilder.add_shape(engine, "S1", ["L2", "L4", "L3"], shape_codes_str='"BTLot"')
+        # Link đáy BT lót P4 -> P6 khép kín Shape
+        GeometryBuilder.add_link(engine, "L7", "P4", "P6", link_codes_str='"BTLot", "Datum"')
+        # Shape BT lót: P4 -> P5 -> P7 -> P6 -> P4
+        GeometryBuilder.add_shape(engine, "S1", ["L2", "L4", "L3", "L7"], shape_codes_str='"BTLot"')
 
         # Vách đào phui dốc lên mặt đất EG: P8 từ P2 lên EG, P9 từ P3 lên EG
         GeometryBuilder.add_point_and_link(engine, "P8", "P2", PointGeometryType.SLOPE_TO_SURFACE, "-SideSlope", "EG", point_codes_str='"Top_Phui_L"', add_link=True, link_name="L5", link_codes_str='"VachPhui"')
@@ -119,7 +123,8 @@ class NativeSuiteBuilder:
 
         # Đáy lớp vét hữu cơ song song hạ StrippingDepth
         GeometryBuilder.add_point_and_link(engine, "P3", "P1", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-StrippingDepth", point_codes_str='"VHC_Start"')
-        GeometryBuilder.add_point_and_link(engine, "P4", "P2", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-StrippingDepth", point_codes_str='"VHC_End"', add_link=True, link_name="L2", link_codes_str='"Datum", "VHC"')
+        GeometryBuilder.add_point_and_link(engine, "P4", "P2", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-StrippingDepth", point_codes_str='"VHC_End"', add_link=False)
+        GeometryBuilder.add_link(engine, "L2", "P3", "P4", link_codes_str='"Datum", "VHC"')
 
         # Khép link vách 2 bên
         GeometryBuilder.add_link(engine, "L3", "P1", "P3", link_codes_str='"VHC"')
@@ -163,8 +168,11 @@ class NativeSuiteBuilder:
         GeometryBuilder.add_point_and_link(engine, "P2", "Origin", PointGeometryType.DELTA_X_ON_SURFACE, "0.0", "Surface_TK", point_codes_str='"TK_Tim"')
 
         # Điểm biên phải
-        GeometryBuilder.add_point_and_link(engine, "P3", "Origin", PointGeometryType.DELTA_X_ON_SURFACE, "B_quet", "Surface_TN", point_codes_str='"TN_Bien"', add_link=True, link_name="L1", link_codes_str='"TN"')
-        GeometryBuilder.add_point_and_link(engine, "P4", "Origin", PointGeometryType.DELTA_X_ON_SURFACE, "B_quet", "Surface_TK", point_codes_str='"TK_Bien"', add_link=True, link_name="L2", link_codes_str='"TK"')
+        GeometryBuilder.add_point_and_link(engine, "P3", "Origin", PointGeometryType.DELTA_X_ON_SURFACE, "B_quet", "Surface_TN", point_codes_str='"TN_Bien"', add_link=False)
+        GeometryBuilder.add_point_and_link(engine, "P4", "Origin", PointGeometryType.DELTA_X_ON_SURFACE, "B_quet", "Surface_TK", point_codes_str='"TK_Bien"', add_link=False)
+        # Link bám bề mặt từ tim ra biên (AutoLink từ Origin sẽ sai điểm đầu)
+        GeometryBuilder.add_link(engine, "L1", "P1", "P3", link_codes_str='"TN"')
+        GeometryBuilder.add_link(engine, "L2", "P2", "P4", link_codes_str='"TK"')
 
         # Khép link 2 đầu
         GeometryBuilder.add_link(engine, "L3", "P1", "P2", link_codes_str='"ChenhCao"')
@@ -277,7 +285,7 @@ class NativeSuiteBuilder:
             y=380.0,
         )
 
-        # 4. Nhánh Đắp: Decision Giật cơ đắp Var_H > H_GiatCo_Dap
+        # 4. Nhánh Đắp (True): Decision Giật cơ đắp Var_H > H_GiatCo_Dap
         dec_dap_co = LogicBuilder.add_flow_decision(
             engine,
             condition_expr="Var_H > H_GiatCo_Dap",
@@ -287,11 +295,22 @@ class NativeSuiteBuilder:
             auto_attach=False,
         )
         engine.set_decision_branches(dec_cut_fill["element"], true_ref_id=dec_dap_co["decision_node_id"])
+        dap_co_id = dec_dap_co["decision_node_id"]
+        cut_fill_id = dec_cut_fill["decision_node_id"]
 
-        # Nhánh Đắp có giật cơ: P2 -> P3 (mái tầng 1 hạ H_GiatCo_Dap) -> P4 (mặt cơ B_Co_Dap) -> P5 (mái 2 xuống EG)
-        GeometryBuilder.add_point_and_link(engine, "P3", "P2", PointGeometryType.SLOPE_DELTA_Y, "s_Dap", "-H_GiatCo_Dap", point_codes_str='"Dinh_Co_Dap"', add_link=True, link_name="L2", link_codes_str='"Daylight", "TaluyDap"', parent_node_id=f"{dec_dap_co['decision_node_id']}:True")
-        GeometryBuilder.add_point_and_link(engine, "P4", "P3", PointGeometryType.SLOPE_DELTA_X, "i_Co_Dap", "B_Co_Dap", point_codes_str='"Mep_Co_Dap"', add_link=True, link_name="L3", link_codes_str='"Top", "MatCo"')
-        GeometryBuilder.add_point_and_link(engine, "P5", "P4", PointGeometryType.SLOPE_TO_SURFACE, "s_Dap", "EG", point_codes_str='"Chan_Taluy_Dap"', add_link=True, link_name="L4", link_codes_str='"Daylight", "TaluyDap"')
+        # 4a. Đắp có giật cơ: P2 -> P3 (mái tầng 1 hạ H_GiatCo_Dap) -> P4 (mặt cơ B_Co_Dap) -> P5 (mái 2 xuống EG)
+        # Mọi node trong nhánh truyền parent_node_id rõ ràng; bỏ trống sẽ nối vào MỌI đầu ra mở của luồng.
+        r = GeometryBuilder.add_point_and_link(engine, "P3", "P2", PointGeometryType.SLOPE_DELTA_Y, "s_Dap", "-H_GiatCo_Dap", point_codes_str='"Dinh_Co_Dap"', add_link=True, link_name="L2", link_codes_str='"Daylight", "TaluyDap"', parent_node_id=f"{dap_co_id}:True")
+        r = GeometryBuilder.add_point_and_link(engine, "P4", "P3", PointGeometryType.SLOPE_DELTA_X, "i_Co_Dap", "B_Co_Dap", point_codes_str='"Mep_Co_Dap"', add_link=True, link_name="L3", link_codes_str='"Top", "MatCo"', parent_node_id=r["reference_id"])
+        GeometryBuilder.add_point_and_link(engine, "P5", "P4", PointGeometryType.SLOPE_TO_SURFACE, "s_Dap", "EG", point_codes_str='"Chan_Taluy_Dap"', add_link=True, link_name="L4", link_codes_str='"Daylight", "TaluyDap"', parent_node_id=r["reference_id"])
+
+        # 4b. Đắp không giật cơ (False): mái s_Dap từ vai taluy P2 thẳng xuống EG
+        GeometryBuilder.add_point_and_link(engine, "P5", "P2", PointGeometryType.SLOPE_TO_SURFACE, "s_Dap", "EG", point_codes_str='"Chan_Taluy_Dap"', add_link=True, link_name="L5", link_codes_str='"Daylight", "TaluyDap"', parent_node_id=f"{dap_co_id}:False")
+
+        # 5. Nhánh Đào (False của "Đắp hay Đào?"): rãnh biên b_ranh x h_ranh rồi mái đào s_Dao lên EG
+        r = GeometryBuilder.add_point_and_link(engine, "P6", "P2", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-h_ranh", point_codes_str='"Day_Ranh_Trong"', add_link=True, link_name="L6", link_codes_str='"Ditch"', parent_node_id=f"{cut_fill_id}:False")
+        r = GeometryBuilder.add_point_and_link(engine, "P7", "P6", PointGeometryType.DELTA_X_DELTA_Y, "b_ranh", "0.0", point_codes_str='"Day_Ranh_Ngoai"', add_link=True, link_name="L7", link_codes_str='"Ditch"', parent_node_id=r["reference_id"])
+        GeometryBuilder.add_point_and_link(engine, "P8", "P7", PointGeometryType.SLOPE_TO_SURFACE, "s_Dao", "EG", point_codes_str='"Dinh_Taluy_Dao"', add_link=True, link_name="L8", link_codes_str='"Daylight", "TaluyDao"', parent_node_id=r["reference_id"])
 
         pkg.set_xaml_text(engine.to_xaml_string())
         pkg.save()
@@ -323,30 +342,35 @@ class NativeSuiteBuilder:
             ParameterBuilder.add_parameter(engine, pname, cat, dt, def_val, disp, desc)
             pkg.sync_parameter_to_atc(pname, dt.value, def_val, disp, desc)
 
+        # Mỗi lớp là một tứ giác khép kín: Link trên, cạnh phải (mép mở rộng), Link đáy, cạnh trái (ngàm vào mặt cũ).
+        # AutoLink luôn nối from_point -> điểm mới nên chỉ dùng cho các cạnh bên; Link đáy tạo bằng add_link.
         # Mặt trên lớp cạp P1 -> P2
-        GeometryBuilder.add_point_and_link(engine, "P1", "Origin", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "0.0", point_codes_str='"Mep_Cu"')
+        GeometryBuilder.add_point_and_link(engine, "P1", "Origin", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "0.0", point_codes_str='"Mep_Cu"', add_link=False)
         GeometryBuilder.add_point_and_link(engine, "P2", "P1", PointGeometryType.SLOPE_DELTA_X, "i_mat", "B_cap", point_codes_str='"Mep_Moi"', add_link=True, link_name="L1", link_codes_str='"Top", "Pave"')
 
-        # Đáy lớp 1 Pave1: P3, P4
-        GeometryBuilder.add_point_and_link(engine, "P3", "P1", PointGeometryType.DELTA_X_DELTA_Y, "-b_cap_vao", "-t1", point_codes_str='"Ngam_Cu_1"')
-        GeometryBuilder.add_point_and_link(engine, "P4", "P2", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-t1", point_codes_str='"Day_Pave1"', add_link=True, link_name="L2", link_codes_str='"Pave1"')
-        GeometryBuilder.add_link(engine, "L3", "P2", "P4", link_codes_str='"Pave"')
-        GeometryBuilder.add_link(engine, "L4", "P1", "P3", link_codes_str='"Ngam"')
+        # Lớp 1 Pave1: P3 (ngàm), P4 (mép) - S1: P1 -> P2 -> P4 -> P3 -> P1
+        GeometryBuilder.add_point_and_link(engine, "P3", "P1", PointGeometryType.DELTA_X_DELTA_Y, "-b_cap_vao", "-t1", point_codes_str='"Ngam_Cu_1"', add_link=True, link_name="L4", link_codes_str='"Ngam"')
+        GeometryBuilder.add_point_and_link(engine, "P4", "P2", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-t1", point_codes_str='"Day_Pave1"', add_link=True, link_name="L3", link_codes_str='"Pave"')
+        GeometryBuilder.add_link(engine, "L2", "P3", "P4", link_codes_str='"Pave1"')
         GeometryBuilder.add_shape(engine, "S1", ["L1", "L3", "L2", "L4"], shape_codes_str='"Pave1"')
 
-        # Đáy lớp 2 Pave2: P5, P6
-        GeometryBuilder.add_point_and_link(engine, "P5", "P3", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-t2", point_codes_str='"Ngam_Cu_2"')
-        GeometryBuilder.add_point_and_link(engine, "P6", "P4", PointGeometryType.DELTA_X_DELTA_Y, "mr_bac", "-t2", point_codes_str='"Day_Pave2"', add_link=True, link_name="L5", link_codes_str='"Pave2"')
-        GeometryBuilder.add_link(engine, "L6", "P4", "P6", link_codes_str='"Pave"')
-        GeometryBuilder.add_link(engine, "L7", "P3", "P5", link_codes_str='"Ngam"')
+        # Lớp 2 Pave2: P5, P6 (mở rộng mr_bac) - S2: P3 -> P4 -> P6 -> P5 -> P3
+        GeometryBuilder.add_point_and_link(engine, "P5", "P3", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-t2", point_codes_str='"Ngam_Cu_2"', add_link=True, link_name="L7", link_codes_str='"Ngam"')
+        GeometryBuilder.add_point_and_link(engine, "P6", "P4", PointGeometryType.DELTA_X_DELTA_Y, "mr_bac", "-t2", point_codes_str='"Day_Pave2"', add_link=True, link_name="L6", link_codes_str='"Pave"')
+        GeometryBuilder.add_link(engine, "L5", "P5", "P6", link_codes_str='"Pave2"')
         GeometryBuilder.add_shape(engine, "S2", ["L2", "L6", "L5", "L7"], shape_codes_str='"Pave2"')
 
-        # Đáy lớp 3 Base: P7, P8
-        GeometryBuilder.add_point_and_link(engine, "P7", "P5", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-t3", point_codes_str='"Ngam_Cu_3"')
-        GeometryBuilder.add_point_and_link(engine, "P8", "P6", PointGeometryType.DELTA_X_DELTA_Y, "mr_bac", "-t3", point_codes_str='"Day_Base"', add_link=True, link_name="L8", link_codes_str='"Base"')
-        GeometryBuilder.add_link(engine, "L9", "P6", "P8", link_codes_str='"Base"')
-        GeometryBuilder.add_link(engine, "L10", "P5", "P7", link_codes_str='"Ngam"')
+        # Lớp 3 Base: P7, P8 - S3: P5 -> P6 -> P8 -> P7 -> P5
+        GeometryBuilder.add_point_and_link(engine, "P7", "P5", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-t3", point_codes_str='"Ngam_Cu_3"', add_link=True, link_name="L10", link_codes_str='"Ngam"')
+        GeometryBuilder.add_point_and_link(engine, "P8", "P6", PointGeometryType.DELTA_X_DELTA_Y, "mr_bac", "-t3", point_codes_str='"Day_Base"', add_link=True, link_name="L9", link_codes_str='"Base"')
+        GeometryBuilder.add_link(engine, "L8", "P7", "P8", link_codes_str='"Base"')
         GeometryBuilder.add_shape(engine, "S3", ["L5", "L9", "L8", "L10"], shape_codes_str='"Base"')
+
+        # Lớp 4 SubBase: P9, P10 - S4: P7 -> P8 -> P10 -> P9 -> P7
+        GeometryBuilder.add_point_and_link(engine, "P9", "P7", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-t4", point_codes_str='"Ngam_Cu_4"', add_link=True, link_name="L13", link_codes_str='"Ngam"')
+        GeometryBuilder.add_point_and_link(engine, "P10", "P8", PointGeometryType.DELTA_X_DELTA_Y, "mr_bac", "-t4", point_codes_str='"Day_SubBase"', add_link=True, link_name="L12", link_codes_str='"SubBase"')
+        GeometryBuilder.add_link(engine, "L11", "P9", "P10", link_codes_str='"SubBase", "Datum"')
+        GeometryBuilder.add_shape(engine, "S4", ["L8", "L12", "L11", "L13"], shape_codes_str='"SubBase"')
 
         pkg.set_xaml_text(engine.to_xaml_string())
         pkg.save()
@@ -378,30 +402,31 @@ class NativeSuiteBuilder:
             ParameterBuilder.add_parameter(engine, pname, cat, dt, def_val, disp, desc)
             pkg.sync_parameter_to_atc(pname, dt.value, def_val, disp, desc)
 
+        # Mỗi lớp là một tứ giác khép kín: Link trên, cạnh mép (AutoLink), Link đáy (add_link), cạnh tim (AutoLink).
         # Mặt trên áo đường P1 (Tim) -> P2 (Mép)
-        GeometryBuilder.add_point_and_link(engine, "P1", "Origin", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "0.0", point_codes_str='"Crown"')
+        GeometryBuilder.add_point_and_link(engine, "P1", "Origin", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "0.0", point_codes_str='"Crown"', add_link=False)
         GeometryBuilder.add_point_and_link(engine, "P2", "P1", PointGeometryType.SLOPE_DELTA_X, "i_lan", "B_lan", point_codes_str='"Mep_PXC"', add_link=True, link_name="L1", link_codes_str='"Top", "Pave"')
 
-        # Lớp 1 Pave1: P3 (Tim), P4 (Mép)
-        GeometryBuilder.add_point_and_link(engine, "P3", "P1", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-t1", point_codes_str='"Day_Pave1_Tim"')
-        GeometryBuilder.add_point_and_link(engine, "P4", "P2", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-t1", point_codes_str='"Day_Pave1_Mep"', add_link=True, link_name="L2", link_codes_str='"Pave1"')
-        GeometryBuilder.add_link(engine, "L3", "P2", "P4", link_codes_str='"Pave"')
-        GeometryBuilder.add_link(engine, "L4", "P1", "P3", link_codes_str='"Crown"')
-        GeometryBuilder.add_shape(engine, "S1", ["L1", "L3", "L2", "L4"], shape_codes_str='"Pave1"')
-
-        # Lớp 2 Pave2: P5 (Tim), P6 (Mép mở rộng mr_bac)
-        GeometryBuilder.add_point_and_link(engine, "P5", "P3", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-t2", point_codes_str='"Day_Pave2_Tim"')
-        GeometryBuilder.add_point_and_link(engine, "P6", "P4", PointGeometryType.DELTA_X_DELTA_Y, "mr_bac", "-t2", point_codes_str='"Day_Pave2_Mep"', add_link=True, link_name="L5", link_codes_str='"Pave2"')
-        GeometryBuilder.add_link(engine, "L6", "P4", "P6", link_codes_str='"Pave"')
-        GeometryBuilder.add_link(engine, "L7", "P3", "P5", link_codes_str='"Crown"')
-        GeometryBuilder.add_shape(engine, "S2", ["L2", "L6", "L5", "L7"], shape_codes_str='"Pave2"')
-
-        # Lớp 3 Base: P7 (Tim), P8 (Mép mở rộng thêm mr_bac)
-        GeometryBuilder.add_point_and_link(engine, "P7", "P5", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-t3", point_codes_str='"Day_Base_Tim"')
-        GeometryBuilder.add_point_and_link(engine, "P8", "P6", PointGeometryType.DELTA_X_DELTA_Y, "mr_bac", "-t3", point_codes_str='"Day_Base_Mep"', add_link=True, link_name="L8", link_codes_str='"Base"')
-        GeometryBuilder.add_link(engine, "L9", "P6", "P8", link_codes_str='"Base"')
-        GeometryBuilder.add_link(engine, "L10", "P5", "P7", link_codes_str='"Crown"')
-        GeometryBuilder.add_shape(engine, "S3", ["L5", "L9", "L8", "L10"], shape_codes_str='"Base"')
+        layers = [
+            # (thickness, ext, shape code, bottom link codes)
+            ("t1", "0.0", "Pave1", '"Pave1"'),
+            ("t2", "mr_bac", "Pave2", '"Pave2"'),
+            ("t3", "mr_bac", "Base", '"Base"'),
+            ("t4", "mr_bac", "SubBase", '"SubBase"'),
+            ("t5", "mr_bac", "K98", '"K98", "Datum"'),
+        ]
+        top_tim, top_mep, top_link = "P1", "P2", "L1"
+        for idx, (thk, ext, scode, bcodes) in enumerate(layers):
+            n = 2 * idx + 3          # P3/P4, P5/P6, ...
+            l = 3 * idx + 2          # L2..L4, L5..L7, ...
+            p_tim, p_mep = f"P{n}", f"P{n + 1}"
+            l_day, l_mep, l_tim = f"L{l}", f"L{l + 1}", f"L{l + 2}"
+            GeometryBuilder.add_point_and_link(engine, p_tim, top_tim, PointGeometryType.DELTA_X_DELTA_Y, "0.0", f"-{thk}", point_codes_str=f'"Day_{scode}_Tim"', add_link=True, link_name=l_tim, link_codes_str='"Crown"')
+            GeometryBuilder.add_point_and_link(engine, p_mep, top_mep, PointGeometryType.DELTA_X_DELTA_Y, ext, f"-{thk}", point_codes_str=f'"Day_{scode}_Mep"', add_link=True, link_name=l_mep, link_codes_str='"Pave"')
+            GeometryBuilder.add_link(engine, l_day, p_tim, p_mep, link_codes_str=bcodes)
+            # Vòng: tim_trên -> mép_trên -> mép_dưới -> tim_dưới -> tim_trên
+            GeometryBuilder.add_shape(engine, f"S{idx + 1}", [top_link, l_mep, l_day, l_tim], shape_codes_str=f'"{scode}"')
+            top_tim, top_mep, top_link = p_tim, p_mep, l_day
 
         pkg.set_xaml_text(engine.to_xaml_string())
         pkg.save()
@@ -445,13 +470,16 @@ class NativeSuiteBuilder:
 
         # Khóa đỉnh: hạ P10 (-H_GC), P13 (-H_GC - H_Lot)
         GeometryBuilder.add_point_and_link(engine, "P10", "P1", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-H_GC", point_codes_str='"P10"')
-        GeometryBuilder.add_point_and_link(engine, "P11", "P2", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-H_GC", point_codes_str='"P11"', add_link=True, link_name="L12", link_codes_str='"Day_GiaCo"')
+        GeometryBuilder.add_point_and_link(engine, "P11", "P2", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-H_GC", point_codes_str='"P11"', add_link=True, link_name="L13", link_codes_str='"KhoaDinh"')
         GeometryBuilder.add_link(engine, "L11", "P1", "P10", link_codes_str='"KhoaDinh"')
-        GeometryBuilder.add_shape(engine, "S1", ["L1", "L11", "L12"], shape_codes_str='"S_DinhGC"')
+        GeometryBuilder.add_link(engine, "L12", "P10", "P11", link_codes_str='"Day_GiaCo"')
+        # Shape đỉnh gia cố: P1 -> P2 -> P11 -> P10 -> P1
+        GeometryBuilder.add_shape(engine, "S1", ["L1", "L13", "L12", "L11"], shape_codes_str='"S_DinhGC"')
 
         # Lớp đệm lót đỉnh P13, P14
         GeometryBuilder.add_point_and_link(engine, "P13", "P10", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-H_Lot", point_codes_str='"P13"')
-        GeometryBuilder.add_point_and_link(engine, "P14", "P11", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-H_Lot", point_codes_str='"P14"', add_link=True, link_name="L17", link_codes_str='"Day_Lot"')
+        GeometryBuilder.add_point_and_link(engine, "P14", "P11", PointGeometryType.DELTA_X_DELTA_Y, "0.0", "-H_Lot", point_codes_str='"P14"', add_link=False)
+        GeometryBuilder.add_link(engine, "L17", "P13", "P14", link_codes_str='"Day_Lot"')
 
         # Điểm phụ AP1 bắn xuống mặt đất EG
         GeometryBuilder.add_point_and_link(engine, "AP1", "P2", PointGeometryType.SLOPE_TO_SURFACE, "-1.5", "EG", is_auxiliary=True)
