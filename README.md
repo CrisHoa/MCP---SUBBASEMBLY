@@ -17,10 +17,10 @@ Chạy qua [sac-cli.bat](sac-cli.bat) (dùng Python trong `.venv`):
 .\sac-cli.bat validate "D:\duong\dan\file.pkt" --doc         # thêm bước mở bằng SubassemblyDocument (~2 giây)
 .\sac-cli.bat validate "D:\duong\dan\file.pkt" --no-native   # bỏ qua Tầng 3
 
-# 2. Dựng sub Gia Cố Mái Taluy Phú Yên và tự động kiểm định
+# 2. Dựng nhanh riêng sub và tự động kiểm định:
 .\sac-cli.bat build --giaco
 
-# 3. Dựng Bộ 7 Subassembly chuẩn và tự động kiểm định
+# 3. Dựng nhanh Bộ Subassembly chuẩn và tự động kiểm định:
 .\sac-cli.bat build --sub7
 
 # 4. Dựng tất cả, kiểm định và xuất ra thư mục chỉ định
